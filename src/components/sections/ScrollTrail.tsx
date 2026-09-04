@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
  * readable block of prose in the page, which is the whole point of building it
  * this way round.
  */
-const TrailScene = dynamic(() => import("@/components/three/TrailScene"), {
+const CosmosScene = dynamic(() => import("@/components/three/CosmosScene"), {
   ssr: false,
 });
 
@@ -49,7 +49,7 @@ export function ScrollTrail({
   id = "trail",
   chapters,
   label,
-  scene: Scene = TrailScene,
+  scene: Scene = CosmosScene,
 }: {
   /** Not baked in: the shell is the mechanism, not the section. */
   id?: string;
