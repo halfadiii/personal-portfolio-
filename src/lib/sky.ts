@@ -1,78 +1,12 @@
 /**
- * What is in the sky over New York right now, and how it is lit.
+ * The moon over New York, and how it is lit.
  *
- * Two questions, both answered from the clock rather than from a guess. Which
- * body is up is a matter of where the sun is, which is astronomy and is worth
- * doing properly — "day is six until six" is wrong by an hour and a half in
- * June and wrong the other way in December, and a site that puts a sun in the
- * sky at half past seven on a January evening has told a small lie about the
- * one thing it was claiming to know.
+ * Answered from the clock rather than from a guess. There used to be a solar
+ * position in here too, deciding whether the sky showed a sun or a moon; the
+ * section only ever wanted the moon, so the sun went with it.
  */
 
-/** Where the clock on this page is. */
-export const PLACE = { latitude: 40.7128, longitude: -74.006 };
-
-const RAD = Math.PI / 180;
 const DAY = 86_400_000;
-
-/** Days since J2000.0 — 2000-01-01 12:00 UTC. */
-function daysSinceJ2000(at: Date): number {
-  return (at.getTime() - Date.UTC(2000, 0, 1, 12)) / DAY;
-}
-
-/**
- * How high the sun is above the horizon, in degrees. Negative means down.
- *
- * The low-precision solar position from the Astronomical Almanac: mean
- * longitude and anomaly, two terms of the equation of centre, then a rotation
- * into the horizon frame. Good to about a hundredth of a degree, which is
- * around a second of sunrise — far past what a picture of a sun needs, and
- * cheap enough to run on every tick.
- */
-export function sunAltitude(at: Date = new Date()): number {
-  const d = daysSinceJ2000(at);
-
-  const meanLongitude = (280.46 + 0.9856474 * d) * RAD;
-  const meanAnomaly = (357.528 + 0.9856003 * d) * RAD;
-
-  // The orbit is an ellipse, so the sun runs ahead of its mean position for
-  // half the year and behind it for the other half.
-  const ecliptic =
-    meanLongitude +
-    1.915 * RAD * Math.sin(meanAnomaly) +
-    0.02 * RAD * Math.sin(2 * meanAnomaly);
-
-  const obliquity = (23.439 - 0.0000004 * d) * RAD;
-
-  const rightAscension = Math.atan2(
-    Math.cos(obliquity) * Math.sin(ecliptic),
-    Math.cos(ecliptic),
-  );
-  const declination = Math.asin(Math.sin(obliquity) * Math.sin(ecliptic));
-
-  // Greenwich mean sidereal time, then carried west to the observer.
-  const gmst = (18.697374558 + 24.06570982441908 * d) % 24;
-  const localSidereal = (gmst * 15 + PLACE.longitude) * RAD;
-  const hourAngle = localSidereal - rightAscension;
-
-  const latitude = PLACE.latitude * RAD;
-  const sine =
-    Math.sin(latitude) * Math.sin(declination) +
-    Math.cos(latitude) * Math.cos(declination) * Math.cos(hourAngle);
-
-  return Math.asin(Math.max(-1, Math.min(1, sine))) / RAD;
-}
-
-/**
- * Which body to draw.
- *
- * The boundary is the sun's centre on the horizon rather than the moment the
- * last of it disappears, because the alternative is arguing about refraction
- * for a picture. Twilight is nobody's idea of daytime.
- */
-export function skyBody(at: Date = new Date()): "sun" | "moon" {
-  return sunAltitude(at) > 0 ? "sun" : "moon";
-}
 
 /* -------------------------------------------------------------------------
    The moon.

@@ -18,7 +18,7 @@ import { Cadence } from "./Cadence";
  * ## Why the surface is threads and not cells
  *
  * In white light the surface is granulation: packed convection cells with dark
- * lanes between them, which is why `SunScene` draws it with a Worley field.
+ * lanes between them, drawn with a Worley field.
  * In H-alpha you are looking at gas held by the magnetic field, and the field
  * is smooth, so what you see is *fibrils* — hair, lying in long curving strands
  * that follow the field lines and swirl around the active regions.

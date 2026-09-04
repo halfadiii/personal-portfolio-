@@ -4,28 +4,29 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useCapability } from "@/components/motion/capability";
 import { useOnScreen } from "@/components/three/useOnScreen";
-import { moonPhase, skyBody } from "@/lib/sky";
+import { moonPhase } from "@/lib/sky";
 import { cn } from "@/lib/utils";
 
 /**
- * Whatever is over New York while you are reading this.
+ * The moon over New York, at the phase it is actually at.
  *
- * Which one is up is worked out from the sun's actual altitude rather than
- * from office hours, and the moon is drawn at the phase it is actually at — so
- * on a night when there is a crescent outside there is a crescent here, and it
- * is leaning the same way.
+ * Always the moon. This used to work out which body was above the horizon from
+ * the sun's real altitude and draw whichever it was, which meant half of all
+ * visitors — the daytime half — never saw this at all and got a sun instead.
+ * Only one of the two was ever wanted here, so only one is built.
  *
- * Both scenes are their own chunks and neither is fetched until this is nearly
- * on screen, which for a section this far down the page means most visits
- * never fetch either. Reduced motion gets nothing: there is no still frame
- * worth the WebGL context, and the section reads perfectly well without it.
+ * The phase is still real. On a night when there is a crescent outside there is
+ * a crescent here, and it is leaning the same way, because the terminator is
+ * placed from the same arithmetic an almanac uses rather than from a shape that
+ * looked about right.
+ *
+ * The scene is its own chunk and is not fetched until this is nearly on screen,
+ * which for a section this far down the page means most visits never fetch it.
+ * Reduced motion gets nothing: there is no still frame worth a WebGL context,
+ * and the section reads perfectly well without one.
  */
 
 const MoonScene = dynamic(() => import("@/components/three/MoonScene"), {
-  ssr: false,
-});
-
-const SunScene = dynamic(() => import("@/components/three/SunScene"), {
   ssr: false,
 });
 
@@ -38,9 +39,12 @@ export function SkyBody({ className }: { className?: string }) {
   useEffect(() => {
     const tick = () => setNow(new Date());
     tick();
-    // Five minutes. The phase moves by a fortieth of a per cent in that time,
-    // and the only thing the clock actually decides here is which body is up.
-    const id = window.setInterval(tick, 300_000);
+    // Hourly, which is already far more often than it needs to be: the phase
+    // moves about a seventh of a per cent in an hour, and nothing else on this
+    // element depends on the clock any more. It used to run every five minutes
+    // because the choice between two bodies turned over at a horizon crossing
+    // and being ten minutes late to a sunrise would have been visible.
+    const id = window.setInterval(tick, 3_600_000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -53,16 +57,12 @@ export function SkyBody({ className }: { className?: string }) {
 
   // Null until mounted, because this depends on the visitor's clock and the
   // server does not have it — the same reason the local time renders empty.
-  const body = now ? skyBody(now) : null;
   const moon = now ? moonPhase(now) : null;
-  const show = near && richMotion && body !== null;
+  const show = near && richMotion && moon !== null;
 
-  const label =
-    body === "sun"
-      ? "The sun, up over New York City right now"
-      : moon
-        ? `${moon.name} over New York City, ${Math.round(moon.illumination * 100)} per cent lit`
-        : undefined;
+  const label = moon
+    ? `${moon.name} over New York City, ${Math.round(moon.illumination * 100)} per cent lit`
+    : undefined;
 
   return (
     <div
@@ -74,13 +74,7 @@ export function SkyBody({ className }: { className?: string }) {
       // half and nothing off the page is ever rasterised.
       className={cn("relative aspect-[1/2]", className)}
     >
-      {show ? (
-        body === "sun" ? (
-          <SunScene drift={!pointerFine} />
-        ) : (
-          <MoonScene phase={moon!.phase} drift={!pointerFine} />
-        )
-      ) : null}
+      {show ? <MoonScene phase={moon.phase} drift={!pointerFine} /> : null}
     </div>
   );
 }
