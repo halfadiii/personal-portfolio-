@@ -57,8 +57,17 @@ import { Cadence } from "./Cadence";
  */
 const SURFACE_SIZE = 768;
 
-/** Sphere radii from the centre to the edge of the corona plane. */
-const REACH = 1.62;
+/**
+ * Radius of the shell the atmosphere is marched inside, in solar radii.
+ *
+ * This is geometry, not a picture: a sphere around the star which a view ray
+ * enters at the front and walks through. It has to reach past the corner of the
+ * frame, because anything it does not cover is atmosphere that is not there.
+ */
+const REACH = 1.85;
+
+/** Cube face size for the baked magnetic field. Low frequency, so small. */
+const FIELD_SIZE = 256;
 
 /** Half the frame height, in sphere radii. Room for the prominences. */
 const FRAME = 1.34;
@@ -259,6 +268,48 @@ const SURFACE_FRAG = /* glsl */ `
   }
 `;
 
+/**
+ * The magnetic field, baked.
+ *
+ * Two things the atmosphere needs to know about every point on the surface:
+ * which way the field runs there, and how strong it is. Both are smooth and
+ * slowly varying, which is why this cube is a third the size of the surface one
+ * and costs almost nothing to generate.
+ *
+ * The activity in alpha is the *same* field the photosphere uses for its plage
+ * and its filaments. That is the point: a prominence is the same structure as a
+ * filament, seen from the side rather than from above, so both have to come out
+ * of one field or the disc and the limb disagree about where the sun is active.
+ *
+ *   RGB  the field direction here, lying in the surface
+ *   A    how magnetically active it is
+ */
+const FIELD_FRAG = /* glsl */ `
+  precision highp float;
+  varying vec3 vDirection;
+
+  ${NOISE}
+
+  void main() {
+    vec3 d = normalize(vDirection);
+
+    // Three noises make an arbitrary smooth vector field; subtracting the
+    // radial part leaves what lies in the surface.
+    vec3 g = vec3(
+      fbm(d * 2.2 + vec3(11.2), 3),
+      fbm(d * 2.2 + vec3(37.7), 3),
+      fbm(d * 2.2 + vec3(61.3), 3)
+    ) - 0.5;
+    vec3 t = g - d * dot(g, d);
+    float len = length(t);
+    t = len > 1e-4 ? t / len : normalize(cross(d, vec3(0.0, 1.0, 0.0)));
+
+    float region = fbm(d * 2.9 + vec3(4.4, 1.2, 8.8), 4);
+
+    gl_FragColor = vec4(t * 0.5 + 0.5, region);
+  }
+`;
+
 const PHOTOSPHERE_VERT = /* glsl */ `
   varying vec3 vDirection;
   varying vec3 vNormalView;
@@ -324,70 +375,256 @@ const PHOTOSPHERE_FRAG = /* glsl */ `
   }
 `;
 
-const CORONA_VERT = /* glsl */ `
-  varying vec2 vUv;
+const SHELL_VERT = /* glsl */ `
+  varying vec3 vObject;
   void main() {
-    vUv = uv;
+    vObject = position;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
-const CORONA_FRAG = /* glsl */ `
+/**
+ * The atmosphere, marched.
+ *
+ * The first version of this was a flat quad behind the sphere, and it looked
+ * like one. Everything it drew was a function of how far a pixel sat from the
+ * middle of the screen, so the tongues stood at screen angles rather than at
+ * places on the sun, they did not turn when the surface turned underneath them,
+ * and none of it had any depth. It was a picture of a corona pasted behind a
+ * ball.
+ *
+ * This is a volume. The mesh is a sphere around the star, and each fragment
+ * walks its own view ray through the shell between the surface and the outer
+ * edge, adding up what it passes through. That one change buys most of what was
+ * missing, because it is what is actually happening:
+ *
+ *   - Everything is sampled in the star's own frame, so the whole atmosphere
+ *     turns with the surface. A tongue belongs to the patch of sun it stands on
+ *     and goes round with it.
+ *   - Prominences stand where the field is, read from the baked field cube —
+ *     the same activity that puts plage and filaments on the disc.
+ *   - Each one is anchored at a footpoint and leans over as it rises, along the
+ *     field, because that is what plasma on a loop does. Height enters the lean
+ *     quadratically, so a tongue arcs rather than tilting.
+ *   - Plasma drifts along the loop over time, so the structure evolves rather
+ *     than shimmering in place.
+ *
+ * ## Why it costs less than it sounds
+ *
+ * Nothing inside the disc is marched at all. A ray whose closest approach to the
+ * centre is under one solar radius has the photosphere in front of it, and
+ * anything suspended over the disc is seen in absorption rather than emission —
+ * which is a filament, and the filaments are already in the baked surface. So
+ * the march runs on an annulus and the whole disc leaves on the second line.
+ *
+ * The other saving is that the ray is straight and the camera is orthographic,
+ * so a ray that misses the sphere cannot be occluded by it. There is no
+ * visibility test anywhere in here, only a distance.
+ */
+const SHELL_FRAG = /* glsl */ `
   precision highp float;
+  uniform samplerCube uField;
   uniform float uTime;
-  uniform float uReach;
-  varying vec2 vUv;
+  uniform vec3  uRay;
+  varying vec3 vObject;
 
   ${NOISE}
 
+  /**
+   * Outer edge of the marched plasma, in solar radii.
+   *
+   * A third of a radius is around two hundred thousand kilometres, which is
+   * taller than all but the rarest prominence. Marching further was marching
+   * empty space and paying for it twice: once in samples, and once in the
+   * dither that low densities over long chords leave behind.
+   */
+  const float SHELL = 1.30;
+  /**
+   * Steps along the chord.
+   *
+   * This and the sheet thickness are one decision, not two. A sheet thinner
+   * than the step gets hit by some rays and missed by their neighbours, and
+   * what that produces is not a thin sheet — it is grain, at pixel scale, which
+   * reads as noise rather than as anything solar. Either the step comes down to
+   * meet the sheet or the sheet goes up to meet the step, and stepping finely
+   * enough to resolve an eighth-of-a-range level set would take about a hundred
+   * and fifty samples. So the sheet is a quarter of the range instead, the step
+   * is halved, and the jitter turns what is left into softness rather than
+   * banding.
+   *
+   * Kept as low as that allows, because a loop in GLSL is unrolled before it is
+   * compiled — every step is another copy of the body in the program, and the
+   * compile is the longest single stall in opening the star.
+   */
+  const int STEPS = 32;
+  /**
+   * How fast suspended plasma thins with height.
+   *
+   * A scale height of a thirteenth of a radius puts most of the material inside
+   * fifty thousand kilometres of the surface, which is where a real quiescent
+   * prominence keeps most of its mass. Slower than this and the star wears the
+   * atmosphere as a shroud rather than standing tongues on it.
+   */
+  const float SCALE_HEIGHT = 11.0;
+
+  /** How much plasma is at this point in the atmosphere. */
+  float plasma(vec3 x, float rr) {
+    float h = rr - 1.0;
+    vec3 d = x / rr;
+
+    vec4 f = textureCube(uField, d);
+
+    /*
+     * Where a prominence is allowed to stand.
+     *
+     * A band rather than a threshold, and that is the physics rather than a
+     * tuning: prominences form on polarity inversion lines — the boundary
+     * between opposite magnetic polarities — not in the middle of an active
+     * region. Threshold the activity instead and they pile up in the centre of
+     * every plage, which is the one place the real ones are not, and the limb
+     * comes out ringed evenly all the way round.
+     *
+     * It is also the same rule that puts filaments on the disc, so a prominence
+     * seen at the limb is the same object that would read as a dark thread if
+     * it happened to be facing us.
+     */
+    float stand =
+      smoothstep(0.45, 0.51, f.a) * (1.0 - smoothstep(0.55, 0.64, f.a));
+    if (stand <= 0.002) return 0.0;
+
+    vec3 tangent = normalize(f.rgb * 2.0 - 1.0);
+
+    /*
+     * The arc.
+     *
+     * Rising plasma is carried along the field, and the further it has risen the
+     * further it has been carried — so the offset grows faster than the height,
+     * and the tongue bends over instead of leaning straight.
+     *
+     * How far it gets carried varies with the local field rather than being one
+     * number everywhere. With a single lean every footpoint in a region throws
+     * its arc at the same angle and the same radius, and what comes out is a set
+     * of evenly nested rings — an arcade drawn by a machine. Tying the reach to
+     * the field strength gives neighbouring loops different spans, which is what
+     * makes a real arcade look like a bundle rather than a diagram.
+     *
+     * The last term is flow along the loop, which is what makes it evolve.
+     */
+    float reach = 1.3 + 2.0 * f.a;
+    vec3 q = x + tangent * (h * reach + h * h * reach * 2.2 + uTime * 0.0032);
+
+    /*
+     * Stand the structures up.
+     *
+     * Keeping less than half of the radial coordinate makes the noise vary
+     * slowly with height and quickly across it, so a feature is tall and narrow
+     * rather than round — which is the shape a prominence has, because the field
+     * holding it up runs that way. This is the same anisotropy that was a no-op
+     * on the surface, and it works here for the reason it failed there: these
+     * sample points have a radial component to compress.
+     */
+    vec3 qs = q - d * (dot(q, d) * 0.38);
+
+    // Thin enough to be a sheet, thick enough for the march to resolve it.
+    // Frequencies chosen against the step, not by eye. The chord is walked in
+    // steps of about a twenty-fifth of a radius, so detail finer than that is
+    // not resolved — it is sampled at random and comes back as streaks. The
+    // body sits at about an eighth of a radius and the carve at a fifteenth,
+    // both comfortably above the step, which is why this reads as structure
+    // rather than as grain.
+    float body = fbm(qs * 8.5, 3);
+    float sheet = pow(clamp(1.0 - abs(body - 0.44) * 4.5, 0.0, 1.0), 2.0);
+
+    // Cut the sheet into separate blades. Without this it is one continuous
+    // surface wrapped round the active field, and a continuous surface at this
+    // scale reads as mist rather than as a dozen separate tongues.
+    float carve = fbm(qs * 15.0, 2);
+    sheet *= smoothstep(0.30, 0.52, carve);
+
+    return sheet * stand * exp(-h * SCALE_HEIGHT);
+  }
+
   void main() {
-    // In sphere radii, so 1.0 is exactly the limb.
-    vec2 p = (vUv - 0.5) * 2.0 * uReach;
-    float r = length(p);
-    // Two early exits, and they are most of what this shader costs. Outside
-    // the quad's circle there is nothing; inside the disc the photosphere is
-    // in front of all this. Leaving without them meant running every octave
-    // below across the whole disc and then multiplying the result by zero.
-    if (r > uReach || r < 0.955) discard;
-    float h = r - 1.0;
+    vec3 p = vObject;
 
-    // Sampled around a ring rather than on the angle. Feeding atan into noise
-    // puts a seam down one side where -pi meets pi; a point on a circle has no
-    // such edge to fall off.
-    vec3 ring = vec3(p / max(r, 0.0001), 0.0);
+    // Closest approach of this ray to the centre: the impact parameter, and the
+    // only geometry this shader needs.
+    float alongC = -dot(p, uRay);
+    vec3 c = p + uRay * alongC;
+    float rs = length(c);
 
-    // Height runs through the noise as fast as angle does. Sample it slowly and
-    // every structure comes out radially constant, which is a starburst — the
-    // shape a lens makes, not the shape gas makes.
-    float flow = fbm(ring * 3.2 + vec3(0.0, 0.0, h * 9.0 - uTime * 0.11), 3);
-    float lean = fbm(ring * 6.5 + vec3(0.0, 0.0, h * 7.0 - uTime * 0.05), 3);
-    float roots = fbm(ring * 11.0 + vec3(0.0, 0.0, h * 4.2 + uTime * 0.028), 3);
+    /*
+     * Where the atmosphere stops, and why it does not stop at the limb.
+     *
+     * The photosphere is opaque and in front of everything here, so the obvious
+     * cut is exactly at one radius. That leaves a dotted ring on the limb, and
+     * the reason is antialiasing: on the silhouette the disc only partly covers
+     * its pixels, and the fraction it does not cover has nothing behind it,
+     * because this shader discarded there. Every other pixel on that circle
+     * gets a different fraction, so the seam comes out as dots rather than as a
+     * line.
+     *
+     * So the atmosphere is carried a little way *under* the disc and faded out
+     * there. Those pixels are already covered by opaque photosphere, so the only
+     * thing the extra reaches is the sliver the disc left, which is exactly what
+     * needed filling.
+     */
+    if (rs < 0.985) discard;
+
+    float hLimb = rs - 1.0;
+    vec3 dLimb = c / rs;
+    vec4 fl = textureCube(uField, dLimb);
 
     // Spicules: the fine bristle of jets standing all the way round the limb,
-    // which is what stops the edge reading as a drawn circle.
-    float bristle = fbm(ring * 52.0 + vec3(0.0, 0.0, uTime * 0.02), 2);
+    // ten thousand kilometres tall and gone in minutes, which is what stops the
+    // edge reading as a drawn circle. Short enough that marching them would
+    // spend twenty-eight samples on a fringe two pixels deep.
+    float bristle = fbm(dLimb * 58.0 + vec3(0.0, 0.0, uTime * 0.018), 2);
     float spicules =
-      exp(-h * 74.0) * pow(max(bristle - 0.42, 0.0) * 3.2, 1.6) * 2.6;
+      exp(-hLimb * 72.0) * pow(max(bristle - 0.42, 0.0) * 3.2, 1.6) * 2.4;
 
-    // The inner corona: bright at the limb, gone within a third of a radius.
-    float halo = exp(-h * 8.5) * (0.30 + 0.85 * flow);
+    // The inner corona, brighter over active field.
+    float halo = exp(-hLimb * 9.0) * (0.10 + 0.18 * fl.a);
+    float far = exp(-hLimb * 2.4) * 0.03;
 
-    // Prominences. Where they stand is the coarse noise at the limb; how far
-    // they reach and which way they lean is the taller field. Sharpened hard,
-    // so they read as separate tongues rather than as a fuzzy ring.
-    float tongues = pow(max(roots - 0.455, 0.0) * 3.5, 2.4);
-    float prominence =
-      exp(-h * 9.0) * tongues * smoothstep(0.08, 0.38, lean) * 7.0;
+    /*
+     * And the loops, which are the part that has to be a volume.
+     *
+     * There is deliberately no early-out here on whether this ray grazes active
+     * field, although one is very tempting and did in fact go in. It cannot
+     * work. The closest-approach direction depends only on the *angle* of the
+     * pixel around the centre and not on its distance from it — every pixel on
+     * a line out from the middle of the star grazes the limb at the same place.
+     * So any test on the field there is constant along that whole line, and
+     * thresholding it does not skip quiet regions: it cuts the atmosphere into
+     * hard-edged pie slices, which is exactly what it looked like.
+     *
+     * The march is cheap enough without it. Skipping the disc is what pays for
+     * this shader, and that is a geometric test rather than a field one.
+     */
+    float loops = 0.0;
+    if (rs < SHELL) {
+      float halfChord = sqrt(max(SHELL * SHELL - rs * rs, 0.0));
+      float stepLen = (2.0 * halfChord) / float(STEPS);
+      // Offset by a per-pixel fraction of a step. Without it every ray samples
+      // the same heights and the atmosphere comes out in shells.
+      float jitter = hash13(vec3(gl_FragCoord.xy, 1.0));
+      vec3 begin = c - uRay * halfChord + uRay * (stepLen * jitter);
+      for (int i = 0; i < STEPS; i++) {
+        vec3 x = begin + uRay * (stepLen * float(i));
+        float rr = length(x);
+        if (rr < 1.0 || rr > SHELL) continue;
+        // Emission, so it simply adds: no ordering, no absorption. At these
+        // densities H-alpha out here is close enough to optically thin.
+        loops += plasma(x, rr) * stepLen;
+      }
+    }
+    loops *= 34.0;
 
-    // A wide faint outer corona, so the whole thing does not stop dead.
-    float outer = exp(-h * 2.4) * (0.05 + 0.06 * flow);
-
-    float glow = halo + prominence + outer + spicules;
-    // Feathered across the limb, so the corona meets the disc rather than
-    // starting at a hard circle one pixel outside it.
-    glow *= smoothstep(0.958, 1.004, r);
-    // And nothing at the edge of the quad, or the corona ends in a square.
-    glow *= smoothstep(uReach, uReach * 0.6, r);
+    float glow = (halo + spicules + loops + far) * smoothstep(0.985, 1.0, rs);
+    // Out to the edge of the shell and no further, or the atmosphere ends on a
+    // circle that is really the geometry showing.
+    glow *= 1.0 - smoothstep(1.42, 1.80, rs);
 
     // Coloured by which of the two is doing the work rather than by how far out
     // the pixel is. Tint by radius and the prominences come out orange the
@@ -395,7 +632,7 @@ const CORONA_FRAG = /* glsl */ `
     // start — they are hydrogen, and hydrogen is red wherever it is standing.
     vec3 hAlpha = vec3(1.00, 0.17, 0.07);
     vec3 hot = vec3(1.00, 0.72, 0.40);
-    float lit = prominence + spicules;
+    float lit = loops + spicules;
     float share = lit / max(lit + halo, 0.0001);
     vec3 colour = mix(hot, hAlpha, clamp(share, 0.0, 1.0));
 
@@ -450,6 +687,54 @@ function useBakedSurface() {
 }
 
 /**
+ * Generates the magnetic field once and hands back the cube.
+ *
+ * No mipmaps, and not only because the field is too smooth to alias. This one
+ * is read from inside a loop, and a cube fetch in non-uniform control flow has
+ * no defined derivative to pick a mip level from — so a mipmapped sampler there
+ * is undefined behaviour that happens to work on some drivers.
+ */
+function useBakedField() {
+  const gl = useThree((state) => state.gl);
+  const [field, setField] = useState<THREE.CubeTexture | null>(null);
+
+  useEffect(() => {
+    const target = new THREE.WebGLCubeRenderTarget(FIELD_SIZE, {
+      generateMipmaps: false,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      colorSpace: THREE.NoColorSpace,
+    });
+
+    const scene = new THREE.Scene();
+    const geometry = new THREE.SphereGeometry(5, 48, 32);
+    const material = new THREE.ShaderMaterial({
+      uniforms: {},
+      vertexShader: SURFACE_VERT,
+      fragmentShader: FIELD_FRAG,
+      side: THREE.BackSide,
+      depthWrite: false,
+      toneMapped: false,
+      blending: THREE.NoBlending,
+    });
+    scene.add(new THREE.Mesh(geometry, material));
+
+    new THREE.CubeCamera(0.1, 20, target).update(gl, scene);
+
+    geometry.dispose();
+    material.dispose();
+    setField(target.texture);
+
+    return () => {
+      setField(null);
+      target.dispose();
+    };
+  }, [gl]);
+
+  return field;
+}
+
+/**
  * Sets the frame. Orthographic, because a sphere this close in perspective
  * has a limb that is not where the geometry says it is, and the whole picture
  * here is about the limb.
@@ -484,10 +769,17 @@ function Star({
   onReady: () => void;
 }) {
   const surface = useBakedSurface();
+  const field = useBakedField();
   const group = useRef<THREE.Group>(null);
-  const ball = useRef<THREE.Mesh>(null);
+  const spin = useRef<THREE.Group>(null);
   const intro = useRef(0);
   const announced = useRef(false);
+
+  // Reused every frame rather than allocated: this runs sixty times a second.
+  const scratch = useMemo(
+    () => ({ turn: new THREE.Quaternion(), look: new THREE.Vector3() }),
+    [],
+  );
 
   // Rebuilt when the bake lands, so the material is compiled with the cube
   // already bound. Handing a shader a null samplerCube and filling it in
@@ -498,15 +790,21 @@ function Star({
     () => ({ uSurface: { value: surface }, uTime: { value: 0 } }),
     [surface],
   );
-  const corona = useMemo(
-    () => ({ uTime: { value: 0 }, uReach: { value: REACH } }),
-    [],
+  // Same reasoning as the photosphere: built around the texture so the program
+  // is compiled with it bound.
+  const shell = useMemo(
+    () => ({
+      uField: { value: field },
+      uTime: { value: 0 },
+      uRay: { value: new THREE.Vector3(0, 0, -1) },
+    }),
+    [field],
   );
 
   useFrame((state, delta) => {
-    // Nothing moves and nothing counts until the surface exists, so the swell
+    // Nothing moves and nothing counts until both bakes exist, so the swell
     // starts from the first frame that has something to swell.
-    if (!surface) return;
+    if (!surface || !field) return;
     if (!announced.current) {
       announced.current = true;
       onReady();
@@ -514,13 +812,31 @@ function Star({
 
     const t = state.clock.elapsedTime;
     photosphere.uTime.value = t;
-    corona.uTime.value = t;
+    shell.uTime.value = t;
 
     // Turning under its own surface, which is the one motion that says this is
     // a sphere and not a picture of one. A quarter of a degree a second: the
     // real thing takes about a month, and this is already a lie by a factor of
     // thirty thousand — any faster and it reads as a spinning ball.
-    if (ball.current) ball.current.rotation.y = t * 0.02;
+    //
+    // The atmosphere is inside this group, so it turns with the surface rather
+    // than hanging in front of it. That is most of the difference between a
+    // corona and a sticker of one.
+    const turning = spin.current;
+    if (turning) {
+      turning.rotation.y = t * 0.02;
+
+      // The march happens in the star's own frame, so the ray has to be carried
+      // into it. Done here, once, rather than as a matrix multiply per sample:
+      // the camera is orthographic, so every pixel shares one ray direction.
+      turning.updateWorldMatrix(true, false);
+      state.camera.getWorldDirection(scratch.look);
+      turning.getWorldQuaternion(scratch.turn);
+      shell.uRay.value
+        .copy(scratch.look)
+        .applyQuaternion(scratch.turn.invert())
+        .normalize();
+    }
 
     const node = group.current;
     if (!node) return;
@@ -540,41 +856,46 @@ function Star({
     node.scale.setScalar(swell);
   });
 
-  if (!surface) return null;
+  if (!surface || !field) return null;
 
   // The sphere is dense because its silhouette is the whole picture and it is
   // drawn a thousand pixels across; a coarser one shows flats on the limb.
   return (
     <group ref={group} scale={INTRO_FROM}>
-      {/* Behind the sphere, so the disc occludes the near half of the corona
-          the way a real limb does. */}
-      <mesh position={[0, 0, -0.05]}>
-        <planeGeometry args={[REACH * 2, REACH * 2]} />
-        <shaderMaterial
-          uniforms={corona}
-          vertexShader={CORONA_VERT}
-          fragmentShader={CORONA_FRAG}
-          transparent
-          depthWrite={false}
-          toneMapped={false}
-          // Straight addition rather than three's additive preset, which
-          // multiplies by alpha on the way in and clips anything brighter than
-          // one. Light adds; it does not average.
-          blending={THREE.CustomBlending}
-          blendSrc={THREE.OneFactor}
-          blendDst={THREE.OneFactor}
-        />
-      </mesh>
+      {/* Surface and atmosphere together, because they are one object and they
+          turn as one. */}
+      <group ref={spin}>
+        <mesh>
+          <sphereGeometry args={[1, 192, 128]} />
+          <shaderMaterial
+            uniforms={photosphere}
+            vertexShader={PHOTOSPHERE_VERT}
+            fragmentShader={PHOTOSPHERE_FRAG}
+            toneMapped={false}
+          />
+        </mesh>
 
-      <mesh ref={ball}>
-        <sphereGeometry args={[1, 192, 128]} />
-        <shaderMaterial
-          uniforms={photosphere}
-          vertexShader={PHOTOSPHERE_VERT}
-          fragmentShader={PHOTOSPHERE_FRAG}
-          toneMapped={false}
-        />
-      </mesh>
+        {/* The volume the atmosphere is marched inside. Front faces only: the
+            fragment is where the ray enters, and it walks in from there. */}
+        <mesh>
+          <sphereGeometry args={[REACH, 64, 48]} />
+          <shaderMaterial
+            uniforms={shell}
+            vertexShader={SHELL_VERT}
+            fragmentShader={SHELL_FRAG}
+            side={THREE.FrontSide}
+            transparent
+            depthWrite={false}
+            toneMapped={false}
+            // Straight addition rather than three's additive preset, which
+            // multiplies by alpha on the way in and clips anything brighter
+            // than one. Light adds; it does not average.
+            blending={THREE.CustomBlending}
+            blendSrc={THREE.OneFactor}
+            blendDst={THREE.OneFactor}
+          />
+        </mesh>
+      </group>
     </group>
   );
 }
