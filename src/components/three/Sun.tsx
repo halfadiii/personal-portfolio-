@@ -35,19 +35,34 @@ const SPAN = 7.6;
  */
 const SWAY = { x: 0.11, y: 0.084, z: 0.044 };
 
+/**
+ * How much of the bloom counts as the star for the purpose of hitting it.
+ *
+ * The quad is 7.6 units across and almost all of that is falloff, so it cannot
+ * be the target — it would cover the inner half of the system and swallow every
+ * drag that started near the middle. This is a little wider than the bright
+ * body (BODY is 0.86 in the shader) and still two and a half times the largest
+ * planet, which is roughly where a viewer would say the star stops.
+ */
+const HIT = 0.95;
+
 export function Sun({
   positionRef,
   pointerRef,
+  onSelect,
 }: {
   /** Written every frame in world space, for everything the light touches. */
   positionRef: React.RefObject<THREE.Vector3>;
   /** -1..1 across the canvas. The star leans with it, and so do the shadows. */
   pointerRef: React.RefObject<THREE.Vector2>;
+  /** Clicking the star itself, which is a different thing from clicking a planet. */
+  onSelect?: () => void;
 }) {
   const group = useRef<THREE.Group>(null);
   const billboard = useRef<THREE.Mesh>(null);
   const material = useRef<THREE.ShaderMaterial>(null);
   const parentRotation = useMemo(() => new THREE.Quaternion(), []);
+  const hovered = useRef(false);
 
   const uniforms = useMemo(
     () => ({
@@ -55,6 +70,7 @@ export function Sun({
       // Half the quad, so the shader can size the star in world units and be
       // compared directly against a planet radius.
       uReach: { value: SPAN * 0.5 },
+      uHover: { value: 0 },
       uHot: { value: new THREE.Color("#fff6e2") },
       uWarm: { value: new THREE.Color("#ff9d3c") },
       uDeep: { value: new THREE.Color("#ff5a12") },
@@ -63,7 +79,15 @@ export function Sun({
   );
 
   useFrame((state, delta) => {
-    if (material.current) material.current.uniforms.uTime.value += delta;
+    if (material.current) {
+      const u = material.current.uniforms;
+      u.uTime.value += delta;
+      // Eased rather than switched: the star is the one thing here with no
+      // edge, and a step change in a glow that has no boundary reads as a
+      // flicker rather than as a response.
+      const want = hovered.current ? 1 : 0;
+      u.uHover.value += (want - u.uHover.value) * (1 - Math.exp(-7 * delta));
+    }
 
     if (group.current) {
       // Leaning the star rather than the whole system is what makes the
@@ -102,6 +126,37 @@ export function Sun({
           toneMapped={false}
         />
       </mesh>
+
+      {/*
+        The target. A sphere rather than a disc because a sphere does not care
+        which way the camera is, so unlike everything else here it needs no
+        billboarding to stay the same size to aim at.
+
+        It draws nothing: colour writing is off, so it cannot tint the bloom it
+        sits inside, and depth writing is off, so it cannot occlude it either.
+        It still raycasts, because three tests visibility and not whether a
+        material would leave a mark.
+      */}
+      {onSelect ? (
+        <mesh
+          onPointerOver={(event) => {
+            event.stopPropagation();
+            hovered.current = true;
+            document.body.style.cursor = "pointer";
+          }}
+          onPointerOut={() => {
+            hovered.current = false;
+            document.body.style.removeProperty("cursor");
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect();
+          }}
+        >
+          <sphereGeometry args={[HIT, 16, 12]} />
+          <meshBasicMaterial colorWrite={false} depthWrite={false} />
+        </mesh>
+      ) : null}
     </group>
   );
 }
@@ -119,6 +174,7 @@ const CORONA_FRAG = /* glsl */ `
 
   uniform float uTime;
   uniform float uReach;
+  uniform float uHover;
   uniform vec3  uHot;
   uniform vec3  uWarm;
   uniform vec3  uDeep;
@@ -150,7 +206,10 @@ const CORONA_FRAG = /* glsl */ `
     // A slow breath, small enough to read as heat rather than as a pulse.
     float breath = 1.0 + 0.05 * sin(uTime * 0.55);
 
-    float glow = (core * 0.9 + body + bloom) * breath;
+    // Hovered, the star swells rather than lights up: the body and the far
+    // bloom gain, the throat does not. Brightening the core instead would just
+    // clip — it is already at one — and nothing would appear to happen.
+    float glow = (core * 0.9 + body * (1.0 + uHover * 0.42) + bloom * (1.0 + uHover * 1.1)) * breath;
 
     // Nothing may survive to the edge of the quad, or the quad becomes a disc.
     glow *= 1.0 - smoothstep(0.62, 1.0, d);

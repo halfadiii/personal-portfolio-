@@ -6,6 +6,7 @@ import Link from "next/link";
 import { projectMetrics, type Project } from "@/content";
 import { useCapability } from "@/components/motion/capability";
 import { onHandover } from "@/components/motion/handover";
+import { StarFocus, warmStar } from "@/components/sections/StarFocus";
 import { cn } from "@/lib/utils";
 
 /**
@@ -61,6 +62,10 @@ export function SceneMount({
   const [mounted, setMounted] = useState(false);
   const [front, setFront] = useState(0);
   const [focused, setFocused] = useState<number | null>(null);
+  // The star, which is not one of the projects and does not belong on the same
+  // axis as them: a planet is a record to read, and this is the whole screen.
+  const [starred, setStarred] = useState(false);
+  const [starDark, setStarDark] = useState(false);
   const stepRef = useRef(0);
   const backRef = useRef<HTMLButtonElement>(null);
   const recordRef = useRef<HTMLDivElement>(null);
@@ -90,6 +95,10 @@ export function SceneMount({
     // Big enough, so the code is worth having. Whether it is worth *running*
     // yet is the loading screen's call.
     warmScene();
+    // The star's surface is its own chunk and its own shader. Fetching it now
+    // costs nothing anyone will feel and takes the download off the click,
+    // which is the one moment there is nothing on screen to cover it.
+    warmStar();
     let cancelled = false;
     const stop = onHandover(() => {
       if (!cancelled) setMounted(true);
@@ -129,13 +138,39 @@ export function SceneMount({
   const select = useCallback((index: number) => {
     setFront(index);
     setFocused(index);
+    setStarred(false);
   }, []);
 
   const dismiss = useCallback(() => setFocused(null), []);
 
+  const selectStar = useCallback(() => {
+    setFocused(null);
+    setStarred(true);
+  }, []);
+
+  const closeStar = useCallback(() => setStarred(false), []);
+
+  /*
+   * Stop the orbit once it is behind an opaque screen.
+   *
+   * Not on the click: the dive into the star is the first half-second of this
+   * and it happens in that canvas. So the scene keeps drawing until the
+   * blackout has finished covering it, and only then goes quiet — which is
+   * also the point after which there is a full-screen sun to draw instead, and
+   * two scenes at once is the one thing this page never asks for.
+   */
+  useEffect(() => {
+    if (!starred) {
+      setStarDark(false);
+      return;
+    }
+    const id = window.setTimeout(() => setStarDark(true), 620);
+    return () => window.clearTimeout(id);
+  }, [starred]);
+
   // Escape is the way out of anything that has taken over the view.
   useEffect(() => {
-    if (focused === null) return;
+    if (focused === null || starred) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setFocused(null);
     };
@@ -146,7 +181,7 @@ export function SceneMount({
     // that was just tapped.
     recordRef.current?.focus();
     return () => window.removeEventListener("keydown", onKey);
-  }, [focused]);
+  }, [focused, starred]);
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -179,12 +214,22 @@ export function SceneMount({
         focused={focused}
         onFrontChange={setFront}
         onSelect={select}
+        starred={starred}
+        onSelectStar={selectStar}
+        paused={starDark}
         onDismiss={dismiss}
         stepRef={stepRef}
       />
 
-      {/* The keyboard and screen-reader path to the same six projects. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
+      <StarFocus open={starred} onClose={closeStar} />
+
+      {/* The keyboard and screen-reader path to the same six projects. Inert
+          behind the star, which is a dialog: it covers all of this, so none of
+          it should still be tabbable or readable underneath. */}
+      <div
+        inert={starred}
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-20"
+      >
         <div className="shell flex flex-col gap-3 pb-4 sm:gap-5 sm:pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div
             ref={recordRef}
