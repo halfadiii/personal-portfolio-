@@ -20,9 +20,10 @@ import { cn } from "@/lib/utils";
  * readable block of prose in the page, which is the whole point of building it
  * this way round.
  */
-const CosmosScene = dynamic(() => import("@/components/three/CosmosScene"), {
-  ssr: false,
-});
+const BlackHoleScene = dynamic(
+  () => import("@/components/three/BlackHoleScene"),
+  { ssr: false },
+);
 
 /**
  * What a scene behind the trail has to accept. Scroll position and the pointer
@@ -49,7 +50,7 @@ export function ScrollTrail({
   id = "trail",
   chapters,
   label,
-  scene: Scene = CosmosScene,
+  scene: Scene = BlackHoleScene,
 }: {
   /** Not baked in: the shell is the mechanism, not the section. */
   id?: string;

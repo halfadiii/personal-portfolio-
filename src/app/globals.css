@@ -540,22 +540,33 @@
    strength everywhere the text is not. The body copy also comes up from steel
    to signal here, which is the part that is real contrast rather than local.
 
-   Up to 1024px, not just phone widths: the copy column is 38rem, so on a
-   tablet it is still most of the screen and the strand still runs through it.
-   Past that the two have room to sit side by side, which is how the section
-   was drawn.
+   At every width, which it did not used to be.
+
+   This was inside a max-width query, on the reasoning that past a thousand
+   pixels the copy and the visual have room to sit side by side. That was true
+   of the strand this section used to hold, which was a narrow vertical shape.
+   It is not true of the black hole that replaced it: a lensed accretion disc
+   is *wide* — the light from behind it arrives around both sides, so the
+   image spans far more of the frame than the object does, and at any width it
+   reaches into the column the text is in. So the halo holds everywhere, and
+   the body copy comes up from steel to signal everywhere.
    -------------------------------------------------------------------------- */
 
-@media (max-width: 1023px) {
-  [data-trail-copy] {
-    text-shadow:
-      0 0 4px rgba(0, 0, 0, 0.92),
-      0 1px 12px rgba(0, 0, 0, 0.8);
-  }
+[data-trail-copy] {
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 0.92),
+    0 1px 12px rgba(0, 0, 0, 0.8);
+}
 
-  [data-trail-copy] p.text-steel {
-    color: var(--signal);
-  }
+[data-trail-copy] p.text-steel {
+  color: var(--signal);
+}
+
+/* The kicker and the figure label are `label-mono`, which is steel by
+   default — small, thin, and sitting directly on the brightest part of an
+   accretion disc. They come up too. */
+[data-trail-copy] .label-mono {
+  color: var(--signal);
 }
 
 /* --------------------------------------------------------------------------
