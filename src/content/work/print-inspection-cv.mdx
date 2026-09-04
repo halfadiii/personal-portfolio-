@@ -1,0 +1,75 @@
+---
+title: AI print inspection system
+hook: Defect detection on high-speed print lines, 69% → 95% mAP.
+period: Aug 2025 – Dec 2025
+stack:
+  - OpenCV
+  - YOLOv8
+  - Python
+summary: >-
+  A vision model that finds print defects on a moving line, raising detection
+  from 69 to 95 mAP and cutting manual review time by 40%.
+---
+
+## Context
+
+High-speed print lines produce more surface than a person can watch. Inspection
+was manual and sampled: an operator pulled sheets, examined them, and made a
+call about the run they represented. Defects that appeared between samples were
+found by the customer.
+
+The brief was to detect defects on the line itself, across several print
+surfaces, without slowing the line down and without flooding operators with
+false alarms.
+
+## What was hard
+
+**The surfaces disagree.** A defect that is high-contrast on one substrate is
+nearly invisible on another. A single detector tuned on one surface degrades
+badly on the rest, and averaging across them produces a model that is mediocre
+everywhere.
+
+**Speed sets the budget.** Inspection has to keep pace with the line, which caps
+how much preprocessing and how large a model is affordable per frame.
+
+**False positives are expensive twice.** They cost operator attention now, and
+they cost trust later — an alerting system operators learn to ignore is worse
+than no alerting system, because it looks like coverage.
+
+## Approach
+
+Preprocessing normalises what varies between substrates before the detector sees
+it: illumination correction and contrast handling in OpenCV, so the model is
+learning defect shape rather than surface brightness.
+
+Detection is YOLOv8, trained across the print surfaces in scope rather than one
+at a time, so a single deployed model generalises instead of a family of models
+that each need their own maintenance.
+
+Beyond detection, the fault patterns matter more than the individual hits. More
+than 700 print sheets were analysed with defect clustering, which turns a stream
+of isolated alerts into recurring pattern groups — the same recurring fault,
+recognised as one problem rather than four hundred.
+
+## Outcome
+
+- Detection performance improved from **69 to 95 mAP** across the print surfaces
+  in scope — 38 points.
+- Manual review time fell by **40%**.
+- Fault-pattern identification accuracy rose by **25%** through defect
+  clustering across 700+ sheets.
+- Deployed into live inspection with real-time alerts, improving traceability by
+  **35%**.
+
+## What I'd change
+
+The clustering step earns its keep and deserves to be first-class rather than
+analysis run alongside the detector. Folding pattern assignment into the serving
+path would let the line surface *this is the same fault as an hour ago* instead
+of a fresh alert each time, which is the difference between a detector and a
+diagnostic.
+
+The other gap is drift. The model was validated against the surfaces in scope at
+the time; a production vision system needs a standing check that today's
+distribution still resembles the one it was trained on, and an alert when it
+does not.

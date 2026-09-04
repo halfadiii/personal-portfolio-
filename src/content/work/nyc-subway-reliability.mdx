@@ -1,0 +1,131 @@
+---
+title: NYC subway reliability pipeline
+hook: The MTA never records when a train actually arrives. This pipeline infers it.
+period: Aug 2026 – present
+stack:
+  - Python
+  - BigQuery
+  - dbt
+  - GCP
+summary: >-
+  Eight real-time MTA feeds, polled every thirty seconds, turned into inferred
+  arrivals, excess wait time, and a measured answer to what rain costs a rider.
+---
+
+## Context
+
+The MTA publishes GTFS-realtime feeds across eight endpoints, one per group of
+lines. Each feed is a snapshot of what the agency currently believes: for every
+trip in service, the stops ahead of it and the times it expects to reach them.
+
+What the feed does not contain is an arrival. There is no event that says *train
+G-1042 reached Bedford–Nostrand at 08:14:32*. A train that arrives simply stops
+appearing in the feed for that stop, and the next snapshot is quietly shorter
+than the last.
+
+Every reliability question a rider actually has — how long will I wait, is this
+line worse in the rain, is the evening worse than the morning — sits downstream
+of an event the source never emits.
+
+## What was hard
+
+Three things, in ascending order of annoyance.
+
+**The arrival has to be reconstructed from an absence.** The only trace of an
+arrival is the last prediction that existed before the record vanished. That
+means the pipeline cannot process a snapshot in isolation; it has to hold a view
+of consecutive snapshots and notice what disappeared between them.
+
+**Disappearance is ambiguous.** A trip–stop pair also vanishes when a train is
+cancelled, re-routed, or short-turned. Treating those as arrivals inflates the
+service picture in exactly the situations riders care most about. The pipeline
+separates them by asking whether the record was ever due: a prediction that
+vanishes while still minutes in the future is not an arrival.
+
+**Waiting is not the average gap.** The intuitive metric — mean headway — is the
+wrong one. Riders arrive at platforms roughly at random, so they are more likely
+to land inside a long gap than a short one. Bunched trains can leave the mean
+headway untouched while making the wait materially worse. The metric that
+describes a bad commute is excess wait time, and it has to be computed from the
+distribution of gaps, not their average.
+
+## Approach
+
+Polling is deliberately dumb and deliberately frequent. A scheduled job pulls
+all eight endpoints every thirty seconds, decodes the protobuf, flattens it, and
+appends. Nothing is deduplicated or corrected on the way in.
+
+```python
+def poll(session, feed_id: str) -> list[dict]:
+    """One poll of one feed, stamped with the instant it was observed."""
+    observed_at = time.time()
+    message = gtfs_realtime_pb2.FeedMessage()
+    message.ParseFromString(session.get(URL + FEEDS[feed_id]).content)
+    ...
+```
+
+The `observed_at` stamp is the whole design. It is what turns a stream of
+opinions into a timeline of beliefs, and the difference between consecutive
+beliefs is where the arrival hides.
+
+Rows land in a BigQuery table partitioned by observation date and clustered by
+route and stop. Append-only, so a transformation bug is never a lost
+observation, and partition pruning keeps a day's reconstruction cheap.
+
+The inference itself is a window function: for each trip–stop pair, take the
+most recent observation, read the arrival time it was carrying when it vanished,
+and drop anything that disappeared while still comfortably in the future.
+
+```sql
+select
+    trip_id,
+    stop_id,
+    predicted_arrival as inferred_arrival,
+    observed_at       as last_seen_at
+from ranked
+where recency = 1
+  and predicted_arrival <= timestamp_add(observed_at, interval 120 second)
+```
+
+From there it is dbt. Inferred arrivals become headways; headways become excess
+wait by line, station, and hour, in fact tables separated from their dimensions
+so the metric can be sliced without rewriting the aggregation. Every model
+carries tests for uniqueness, nullity, and referential integrity, and a failing
+test stops the run rather than publishing a quietly wrong number.
+
+The weather layer joins hourly precipitation to excess wait and fits a
+regression per line, controlling for hour of day. It reports confidence
+intervals alongside the coefficient, because a slope without an interval is a
+claim rather than a measurement.
+
+## Outcome
+
+The pipeline produces a governed answer to a question the raw feed cannot
+answer: for a given line, at a given hour, in a given amount of rain, how much
+longer does a rider wait than the timetable implies.
+
+Three properties matter more than any single figure:
+
+- **The arrival is defensible.** Cancellations and re-routes are excluded by a
+  stated rule, not by a threshold that happened to look tidy.
+- **The metric is the right one.** Excess wait reflects how riders actually
+  experience service; mean headway does not.
+- **The uncertainty ships with the number.** Every coefficient on this site
+  carries its interval and its sample size.
+
+The figures rendered on the home page come from a snapshot committed to this
+repository and dated on the chart, rather than a live query. A portfolio should
+not depend on a warehouse being awake.
+
+## What I'd change
+
+The inference currently runs as a batch pass over a day of observations. That is
+correct and cheap, but it means the site is describing yesterday. A streaming
+version — the same window logic against a bounded buffer — would make the same
+guarantee in near real time, and the ingest already stamps everything it needs.
+
+The cancellation rule is also a single threshold: vanish more than two minutes
+before you were due and you are not an arrival. It is defensible and it is
+documented, but it is a threshold, and thresholds deserve sensitivity analysis.
+Fitting that rule against a labelled sample of known service changes would turn
+a judgement call into a measured one.

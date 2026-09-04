@@ -1,0 +1,6 @@
+.next
+node_modules
+.shots
+public/sound
+src/content/data/subway-wait-snapshot.sample.json
+package-lock.json

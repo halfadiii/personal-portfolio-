@@ -1,26 +1,735 @@
 @import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@import "../styles/tokens.css";
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-void: var(--void);
+  --color-panel: var(--panel);
+  --color-signal: var(--signal);
+  --color-steel: var(--steel);
+  --color-hairline: var(--hairline);
+
+  --color-line-red: var(--line-red);
+  --color-line-blue: var(--line-blue);
+  --color-line-orange: var(--line-orange);
+  --color-line-green: var(--line-green);
+
+  --font-display: var(--font-archivo), "Arial Narrow", Helvetica, sans-serif;
+  --font-sans: var(--font-switzer), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SFMono-Regular", monospace;
+
+  --text-micro: var(--text-micro);
+  --text-small: var(--text-small);
+  --text-body: var(--text-body);
+  --text-lead: var(--text-lead);
+  --text-sub: var(--text-sub);
+  --text-title: var(--text-title);
+  --text-section: var(--text-section);
+  --text-hero: var(--text-hero);
+  --text-name: var(--text-name);
+
+  --ease-brief: var(--ease);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    /* The bar is sticky, so without this every anchor — the nav, the command
+       palette, a case study's contents list — parks its target underneath it
+       and the heading you asked for is the one thing you cannot see. */
+    scroll-padding-top: calc(var(--header-h) + 1.5rem);
+    /* The preloader locks body scroll; without a reserved gutter, losing the
+       scrollbar reflows the page and registers a layout shift (§2.4). */
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--void);
+    color: var(--signal);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* §2.1 — nothing scrolls horizontally that isn't meant to. */
+    overflow-x: clip;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0;
+    /* A word longer than the line has to give somewhere. Hyphenation is the
+       civilised answer; break-word is the backstop when no break point exists. */
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+
+  /* The hero name is set as one unbroken line and must never hyphenate. */
+  [data-hero-name] {
+    hyphens: manual;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  /* Numbers are always mono with tabular figures. */
+  code,
+  kbd,
+  samp,
+  pre,
+  time,
+  [data-numeric] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    display: block;
+    max-width: 100%;
+  }
+
+  ::selection {
+    background: var(--signal);
+    color: var(--void);
+  }
+
+  /* §2.2 — every interactive element is visibly focused. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+    border-radius: 1px;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* --------------------------------------------------------------------------
+   Layout utilities — §4.3. 12 columns, 1600px cap, generous outer margin.
+   -------------------------------------------------------------------------- */
+
+@utility shell {
+  width: 100%;
+  max-width: calc(var(--shell-max) + var(--shell-pad) * 2);
+  margin-inline: auto;
+  padding-inline: var(--shell-pad);
+}
+
+/* Display type is allowed to bleed toward the viewport edge; body text is not. */
+@utility shell-bleed {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: clamp(0.75rem, 1.5vw, 2rem);
+}
+
+/*
+  A hit area big enough to hit — §7.
+
+  A mono label is 12px on a 16px line: a fine thing to read and a bad thing to
+  aim a thumb at. The header links, the footer controls and the "show more"
+  toggles were all 16–19px tall, under the 24px WCAG 2.2 asks for and well
+  under the 44px a thumb actually wants. This grows the target rather than the
+  type, so nothing gets bigger on screen — and it only goes to 44px where the
+  pointer is a finger, so the desktop layout is untouched.
+
+  Applied to something that is not already a flex box, add `inline-flex` with
+  it: `align-items` is what keeps the label centred once the box is taller
+  than the text in it.
+*/
+@utility tap {
+  align-items: center;
+  min-height: 24px;
+  padding-block: 0.25rem;
+
+  @media (pointer: coarse) {
+    min-height: 44px;
+    padding-block: 0.5rem;
+  }
+}
+
+@utility grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+  row-gap: var(--gutter);
+}
+
+@utility measure {
+  max-width: var(--measure);
+}
+
+@utility rule-top {
+  border-top: var(--rule);
+}
+
+@utility rule-bottom {
+  border-bottom: var(--rule);
+}
+
+/* Mono micro-label: `03 / selected work / 2022–2026`. Carries information. */
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--steel);
+}
+
+@utility section-gap {
+  padding-block: var(--rhythm);
+}
+
+@utility section-gap-loose {
+  padding-block: var(--rhythm-loose);
+}
+
+/* --------------------------------------------------------------------------
+   Print — §6 `/resume` must produce a clean A4 with no navigation.
+   -------------------------------------------------------------------------- */
+
+@page {
+  size: A4;
+  margin: 14mm 14mm 12mm;
+}
+
+@media print {
+  :root {
+    --void: #ffffff;
+    --panel: #ffffff;
+    --signal: #000000;
+    --steel: #3c4145;
+    --hairline: #c9c7c0;
+    --rule: 1px solid var(--hairline);
+    --shell-pad: 0;
+    --rhythm: 0.5rem;
+    --rhythm-loose: 0.75rem;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-size: 10pt;
+    line-height: 1.4;
+  }
+
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 8pt;
+    color: var(--steel);
+    word-break: break-all;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid-page;
+  }
+
+  li,
+  section,
+  article {
+    break-inside: avoid;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Panels — one easing curve, 420ms, §4.4. Reduced motion collapses the
+   durations via the token override in tokens.css.
+   -------------------------------------------------------------------------- */
+
+@keyframes panel-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes veil-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+[data-panel][data-state="open"] {
+  animation: panel-in var(--dur-panel) var(--ease);
+}
+
+[data-panel][data-state="closed"] {
+  animation: panel-out var(--dur-panel) var(--ease);
+}
+
+[data-veil][data-state="open"] {
+  animation: veil-in var(--dur-ui) var(--ease);
+}
+
+[data-veil][data-state="closed"] {
+  animation: veil-out var(--dur-ui) var(--ease);
+}
+
+/* --------------------------------------------------------------------------
+   Preloader — hidden unless the gate script opts this visit in, so a visitor
+   with JavaScript off never sees an overlay that cannot be dismissed.
+   -------------------------------------------------------------------------- */
+
+#preloader {
+  display: none;
+}
+
+[data-preloader="on"] #preloader {
+  display: flex;
+}
+
+/* --------------------------------------------------------------------------
+   The craft on the loading screen.
+
+   `PreloaderRunner` writes --thrust and --shake once a frame as the count
+   climbs, then stamps [data-away] when it reaches 100. Everything else is
+   here, because the runner deliberately carries no animation library and
+   moving four properties is not a reason to load one.
+   -------------------------------------------------------------------------- */
+
+[data-preloader-craft] {
+  --thrust: 0;
+  --shake: 0px;
+  will-change: transform;
+}
+
+/* An ease-*in*: a rocket leaves slowly and is gone quickly, and the reverse
+   reads as a balloon. It travels far enough to clear the tallest viewport it
+   is likely to meet. */
+[data-preloader-craft][data-away] {
+  transition: transform 1100ms cubic-bezier(0.42, 0, 0.86, 0.5);
+  transform: translate3d(0, -128vh, 0) scale(0.62);
+}
+
+[data-preloader-shake] {
+  transform: translate3d(var(--shake), 0, 0);
+}
+
+[data-preloader-flame] {
+  /* Grown from the throat rather than the middle, so more thrust is a longer
+     plume and not a bigger blob floating under the craft. Slightly wider as
+     well as longer: a plume that only stretches reads as rubber. */
+  transform-box: view-box;
+  transform-origin: 60px 196px;
+  transform: scale(calc(0.72 + var(--thrust) * 0.28), var(--thrust));
+  opacity: calc(0.2 + var(--thrust) * 0.8);
+}
+
+/* No pointer, no fine motor control, no reason for a shaking rocket. The gate
+   script already withholds the whole sequence under reduced motion; this is
+   the belt to that braces. */
+@media (prefers-reduced-motion: reduce) {
+  [data-preloader-craft],
+  [data-preloader-shake],
+  [data-preloader-flame] {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The hero, once the orbit is in it.
+
+   `SceneMount` stamps [data-orbit] on the root when it decides the ring is
+   worth drawing. Two things follow from that, and neither can be decided from
+   inside the section: it needs a screen's height to be drawn in, and the
+   written index of the same three fragments below the name is a stand-in for
+   a field that is now actually there.
+
+   `svh` rather than `vh`: on a phone `vh` is the height with the address bar
+   hidden, so a hero sized in it is taller than the screen until you scroll.
+   -------------------------------------------------------------------------- */
+
+[data-orbit="on"] #hero {
+  /* One screen, less the bar above it. The hero is the first thing in the
+     flow and the header is sticky, so a plain 100svh is a screen's worth of
+     hero starting a header's worth of the way down it — and the panel pinned
+     to its bottom edge, controls and all, lands underneath the fold. */
+  min-height: calc(100svh - var(--header-h) - 1px);
+}
+
+[data-orbit="on"] [data-hero-index] {
+  display: none;
+}
+
+/*
+  A phone on its side.
+
+  The field is ten cards placed by percentage down the hero, so in one shorter
+  than this they compress into each other and onto the name — which is what a
+  landscape phone got, because the switch between the field and the index rows
+  was on width alone and a phone on its side is 844 points wide. It is the same
+  480 points of height the orbit asks for: above it there is room for a scene,
+  below it there is room for a list.
+*/
+@media (max-height: 479px) {
+  [data-constellation] {
+    display: none;
+  }
+
+  [data-hero-index] {
+    display: flex;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The scrim on the off-the-clock cards — components/sections/OffClock.tsx.
+
+   Two of the four pictures are light: a cream Naruto poster and an orange
+   coffee one. White type over the bottom of either is unreadable, and a
+   Tailwind two-stop gradient is not steep enough to fix it without dimming the
+   whole picture. This is nearly solid where the type sits and gone by the
+   halfway line, so the poster is a poster everywhere the words are not.
+
+   Black rather than `--void` on purpose: this has to be opaque at one end and
+   absent at the other, and only a colour with an alpha channel can be both.
+   -------------------------------------------------------------------------- */
+
+/*
+  Cards that answer the pointer — components/sections/Bento.tsx writes the
+  transform, this says how it travels. Longer than a UI transition because it
+  is a thing moving in space rather than a state changing, and `transform`
+  only, so the compositor owns every frame of it.
+*/
+[data-bento] > * {
+  transition: transform var(--dur-panel) var(--ease);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-bento] > * {
+    transition: none;
+  }
+}
+
+/*
+  The scrim under type that sits on a picture.
+
+  It wraps the text rather than the card. A gradient over the whole card has to
+  guess where the caption will be, and the caption moves the moment a title
+  wraps onto a second line — which is exactly what these do on a small laptop,
+  and exactly where the labels were failing to clear 4.5:1 against a headlight
+  or a cream poster. Sizing the dark to the text instead means the type is over
+  the same darkness at every width, and the picture keeps the room the text is
+  not using.
+
+  It holds a near-flat plateau across the text and does its fading in the
+  padding above it, because a gradient that is still fading where the words are
+  is a gradient that is only legible over half of them.
+
+  The fade runs long and in six stops rather than two, because two stops and a
+  short run is where banding comes from — a hard shoulder between the plateau
+  and the fall, then visible steps down it.
+
+  Its length is in pixels, not per cent, and that distinction is the whole of
+  it. A percentage fade is measured against the block, so the same rule that
+  looks generous on a tall poster eats halfway into the type on a short strip —
+  which is exactly what it did: the credit line on the record card came out at
+  1.26 against neon. Fixed at the padding above the words, the plateau always
+  covers the words and the fade always gets the same smooth run, whatever
+  height the card happens to be.
+*/
+[data-card-scrim] {
+  /* How far the fade runs — set per card to whatever padding sits above the
+     type, because that is exactly the room there is to fade in. The default
+     lives in the var() fallback rather than as a declaration here: this rule
+     is unlayered, so declaring it would outrank any utility trying to override
+     it and the per-card value would silently do nothing. */
+  background: linear-gradient(
+    to top,
+    rgb(0 0 0 / 0.95) 0%,
+    rgb(0 0 0 / 0.93) calc(100% - var(--scrim-fade, 3rem)),
+    rgb(0 0 0 / 0.74) calc(100% - var(--scrim-fade, 3rem) * 0.64),
+    rgb(0 0 0 / 0.44) calc(100% - var(--scrim-fade, 3rem) * 0.36),
+    rgb(0 0 0 / 0.18) calc(100% - var(--scrim-fade, 3rem) * 0.16),
+    rgb(0 0 0 / 0) 100%
+  );
+}
+
+/* --------------------------------------------------------------------------
+   The level meter on the music card — components/sections/OnRepeatCard.tsx.
+
+   Four bars, moving only while something is actually coming out of the
+   speakers. `scaleY` so it is a transform the compositor can run rather than a
+   height the browser has to lay out sixty times a second.
+   -------------------------------------------------------------------------- */
+
+@keyframes level {
+  0%,
+  100% {
+    transform: scaleY(0.22);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+[data-bar="on"] {
+  animation: level 900ms var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-bar="on"] {
+    animation: none;
+    transform: scaleY(0.6);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The scroll trail's copy, where it is standing on the visual.
+
+   On a wide screen the copy takes the left half and the strand lives in the
+   right, so they never meet. On a phone the copy is full width and the strand
+   runs straight down behind it — and a lit backbone crossing a line of steel
+   body text takes it well under the contrast it needs.
+
+   A dark halo rather than a panel over the scene: it is the subtitle
+   treatment, it costs nothing to paint, and it leaves the strand at full
+   strength everywhere the text is not. The body copy also comes up from steel
+   to signal here, which is the part that is real contrast rather than local.
+
+   Up to 1024px, not just phone widths: the copy column is 38rem, so on a
+   tablet it is still most of the screen and the strand still runs through it.
+   Past that the two have room to sit side by side, which is how the section
+   was drawn.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1023px) {
+  [data-trail-copy] {
+    text-shadow:
+      0 0 4px rgba(0, 0, 0, 0.92),
+      0 1px 12px rgba(0, 0, 0, 0.8);
+  }
+
+  [data-trail-copy] p.text-steel {
+    color: var(--signal);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Sunlight on the type.
+
+   `Sunlight` writes --lx / --ly (the direction from the star to this element,
+   already scaled to a shadow length in pixels) and --lit (how much of the
+   star reaches it). Everything below is one text-shadow stack read from those:
+   a warm edge on the side facing the star, a wider warm bloom behind it, and a
+   dark cast shadow on the far side. With no scene mounted the defaults are all
+   zero and the stack collapses to nothing, so the fallback hero is untouched.
+
+   The text colour itself is never changed — contrast has to hold whatever the
+   star is doing, and a shadow is not part of the computed contrast.
+   -------------------------------------------------------------------------- */
+
+[data-sunlit] {
+  --lx: 0;
+  --ly: 0;
+  --lit: 0;
+
+  /* Only the light landing on the type is here. What it blocks is a real
+     projected copy of it — see [data-name-shadow] below. */
+  text-shadow:
+    /* A tight warm edge on the side the star is on. */
+    calc(var(--lx) * -0.22px) calc(var(--ly) * -0.22px) 0
+      rgba(255, 186, 116, calc(var(--lit) * 0.34)),
+    /* And the bloom around it. */ calc(var(--lx) * -0.7px)
+      calc(var(--ly) * -0.7px) 14px rgba(255, 150, 70, calc(var(--lit) * 0.3));
+}
+
+/* --------------------------------------------------------------------------
+   The light behind the heading — see components/sections/NameGlow.tsx.
+
+   No fill, only glow: with nothing filling the glyphs the text shadow is the
+   letterforms blurred, showing through the middle as well as around the edges.
+   `plus-lighter` means it can only ever add light, so it warms the type and
+   spills past it. The padding matters — a mask is clipped to its element's
+   box, and without room the gradient ends in a straight line along the edge of
+   the heading, which is exactly the rectangle this is meant not to draw.
+   -------------------------------------------------------------------------- */
+
+[data-name-glow] {
+  --gx: 50%;
+  --gy: 50%;
+  --glow: 0;
+
+  /* How far the layer overhangs the text on every side. Comfortably more than
+     the mask's radius, so the gradient has fully faded out before it reaches
+     the element's edge — a mask is clipped to its own box, and one that runs
+     into that edge ends in a straight line and reads as a rectangle drawn
+     round the name. Negative inset plus equal padding grows the box by this
+     much on all four sides while leaving the text exactly where the heading
+     put it, so the copy needs no measuring to stay registered with it. */
+  --name-glow-pad: 280px;
+
+  position: absolute;
+  inset: calc(-1 * var(--name-glow-pad));
+  padding: var(--name-glow-pad);
+  color: transparent;
+  pointer-events: none;
+  user-select: none;
+  opacity: var(--glow);
+  mix-blend-mode: plus-lighter;
+  transition: opacity var(--dur-panel) var(--ease);
+
+  text-shadow:
+    0 0 8px rgba(255, 224, 182, 0.95),
+    0 0 22px rgba(255, 176, 96, 0.8),
+    0 0 54px rgba(255, 132, 48, 0.55);
+
+  --name-glow-mask: radial-gradient(
+    circle 210px at var(--gx) var(--gy),
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.62) 44%,
+    rgba(0, 0, 0, 0) 76%
+  );
+  -webkit-mask-image: var(--name-glow-mask);
+  mask-image: var(--name-glow-mask);
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-name-glow] {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Custom cursor — §6. The dot grows into a label on annotated elements; the
+   native cursor is hidden only while the custom one is actually mounted, so a
+   touch device or a reduced-motion visitor keeps the system cursor.
+   -------------------------------------------------------------------------- */
+
+[data-cursor="custom"],
+[data-cursor="custom"] a,
+[data-cursor="custom"] button,
+[data-cursor="custom"] [role="button"],
+[data-cursor="custom"] summary {
+  cursor: none;
+}
+
+[data-custom-cursor] {
+  transition: opacity var(--dur-ui) var(--ease);
+}
+
+[data-custom-cursor] > span {
+  display: block;
+  transform-origin: 0 0;
+  transition:
+    width var(--dur-ui) var(--ease),
+    height var(--dur-ui) var(--ease),
+    padding var(--dur-ui) var(--ease),
+    background-color var(--dur-ui) var(--ease);
+}
+
+/* Idle and active states are a dot: the label is present but has no box. */
+[data-custom-cursor][data-state="idle"] > span,
+[data-custom-cursor][data-state="active"] > span {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  overflow: hidden;
+  color: transparent;
+  background-color: var(--signal);
+  transform: translate(-50%, -50%);
+}
+
+[data-custom-cursor][data-state="active"] > span {
+  width: 16px;
+  height: 16px;
+}
+
+[data-custom-cursor][data-state="label"] > span {
+  transform: translate(0.75rem, 0.75rem);
+}
+
+/* Over an element with a shape the dot hands over to the outline: two marks
+   competing for the same pointer reads as a bug. */
+[data-custom-cursor][data-state="shaped"] > span {
+  width: 4px;
+  height: 4px;
+  padding: 0;
+  overflow: hidden;
+  color: transparent;
+  background-color: var(--signal);
+  opacity: 0.55;
+  transform: translate(-50%, -50%);
+}
+
+/* The outline itself. It traces the hovered element's own box; position and
+   size are written per frame in JS, so only the fade belongs here. */
+[data-cursor-outline] {
+  border: 1px solid var(--signal);
+  opacity: 0;
+  transition: opacity var(--dur-ui) var(--ease);
+}
+
+[data-cursor-outline][data-on="1"] {
+  opacity: 0.85;
+}
+
+[data-custom-cursor][data-state="hidden"] {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce), (pointer: coarse) {
+  [data-custom-cursor],
+  [data-cursor-outline] {
+    display: none;
+  }
+
+  [data-cursor="custom"],
+  [data-cursor="custom"] * {
+    cursor: auto;
+  }
 }

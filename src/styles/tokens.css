@@ -1,0 +1,135 @@
+/* ---------------------------------------------------------------------------
+   Design tokens — §4 of the brief.
+   Runtime values live on :root so surfaces can override them; the Tailwind
+   theme maps to them with `@theme inline` in globals.css.
+   --------------------------------------------------------------------------- */
+
+:root {
+  /* Surface + type. True black canvas, not a tinted near-black. */
+  --void: #000000;
+  --panel: #0d0f10;
+  --signal: #fafaf7;
+  --steel: #7a8085;
+  --hairline: #1e2124;
+
+  /* Selection + focus derive from type colour, never from a data colour. */
+  --focus: var(--signal);
+
+  /* Data encoding only — never as accent, glow, or gradient. */
+  --line-red: #ee352e;
+  --line-blue: #0039a6;
+  --line-orange: #ff6319;
+  --line-green: #00933c;
+
+  /*
+    Stroke variants for marks drawn on the true-black canvas. Red, orange, and
+    green clear 3:1 against --void unarmed; the MTA blue is 1.7:1, which is a
+    line nobody can follow. This is the same hue lifted to 3.5:1 and is used
+    only where a mark sits on --void — the signage value above stays canonical.
+  */
+  --line-red-on-void: var(--line-red);
+  --line-blue-on-void: #2f5fbf;
+  --line-orange-on-void: var(--line-orange);
+  --line-green-on-void: var(--line-green);
+
+  /* Fluid type scale: 0.75 / 0.875 / 1 / 1.25 / 1.75 / 2.5 / 4 / 8 / 14rem. */
+  --text-micro: 0.75rem;
+  --text-small: 0.875rem;
+  --text-body: 1rem;
+  --text-lead: clamp(1.125rem, 1.05rem + 0.35vw, 1.25rem);
+  --text-sub: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+  --text-title: clamp(1.75rem, 1.35rem + 2vw, 2.5rem);
+  --text-section: clamp(2.25rem, 1.4rem + 4.2vw, 4rem);
+  --text-hero: clamp(3rem, 0.9rem + 10.5vw, 8rem);
+  /* 13.6vw, not 14: measured against the expanded width axis, this is the
+     largest size at which the name still fits one line inside its margins. */
+  --text-name: clamp(3.5rem, 13.6vw, 14rem);
+
+  /* Height of the sticky bar. Set by what is in it — a 24px hit target plus
+     the row's own padding — and read back by `scroll-padding-top`, so an
+     anchor never drops its heading behind it. */
+  --header-h: 2.75rem;
+
+  /* Measure + rhythm. */
+  --measure: 68ch;
+  --shell-max: 1600px;
+  --gutter: 1rem;
+  --shell-pad: 1.25rem;
+  --rhythm: 12vh;
+  --rhythm-loose: 20vh;
+
+  /* Motion — one easing curve for everything. */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-ui: 180ms;
+  --dur-panel: 420ms;
+  --dur-page: 900ms;
+
+  /* Hairline rule, expressed once so it never drifts. */
+  --rule: 1px solid var(--hairline);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: 1.5rem;
+    --shell-pad: 2.5rem;
+  }
+}
+
+/* A finger needs a 44px target, so the bar it sits in is taller. */
+@media (pointer: coarse) {
+  :root {
+    --header-h: 3.75rem;
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --shell-pad: 4rem;
+  }
+}
+
+/* §7 — display type caps below 640px, so a long line of it never runs off a
+   narrow screen. The name is the exception: below 640px it is set as two
+   single-word lines, so there is no line long enough to overflow, and holding
+   it at 3.5rem left it filling under half the width of a phone with the other
+   half empty. It scales with the screen instead, up to the point where the
+   two-line break is no longer needed. */
+@media (max-width: 639px) {
+  :root {
+    --text-name: clamp(3.5rem, 21vw, 5.5rem);
+    --text-hero: 3rem;
+  }
+}
+
+/*
+  The one permitted inversion: the printable resume surface. Applied as a data
+  attribute on a wrapper element, so it server-renders with no theme flash.
+*/
+[data-surface="print"],
+[data-theme="print"] {
+  --void: #fafaf7;
+  --panel: #ffffff;
+  --signal: #000000;
+  --steel: #4c5155;
+  --hairline: #d6d4cd;
+  --focus: #000000;
+  --rule: 1px solid var(--hairline);
+}
+
+/* §2.3 — under reduced motion nothing animates, anywhere. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-ui: 1ms;
+    --dur-panel: 1ms;
+    --dur-page: 1ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

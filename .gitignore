@@ -39,3 +39,26 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Screenshot output from scripts/shoot.mjs
+.shots/
+# Local audit artefacts
+.lighthouse-*.json
+.lh-*.json
+.dev.log
+.start*.log
+.build.log
+
+# Playwright
+test-results/
+playwright-report/
+# next-sitemap output
+public/sitemap.xml
+public/robots.txt
+
+# Local working files: a raw GTFS download and GLB experiments. Neither is a
+# build input — public/data holds the processed output that ships.
+.gtfs/
+.tmp/
+.dev.err.log
+.devserver.log

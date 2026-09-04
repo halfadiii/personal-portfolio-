@@ -1,0 +1,309 @@
+{
+  "source": {
+    "name": "UCI Bank Marketing (bank-full.csv)",
+    "citation": "Moro, S., Cortez, P. and Rita, P. (2014). A data-driven approach to predict the success of bank telemarketing. Decision Support Systems.",
+    "url": "https://archive.ics.uci.edu/dataset/222/bank+marketing"
+  },
+  "binary": {
+    "path": "/data/bank-marketing.bin",
+    "rows": 43193,
+    "byteLength": 863860,
+    "layout": [
+      {
+        "name": "age",
+        "type": "u1",
+        "offset": 0
+      },
+      {
+        "name": "job",
+        "type": "u1",
+        "offset": 43193
+      },
+      {
+        "name": "marital",
+        "type": "u1",
+        "offset": 86386
+      },
+      {
+        "name": "education",
+        "type": "u1",
+        "offset": 129579
+      },
+      {
+        "name": "default",
+        "type": "u1",
+        "offset": 172772
+      },
+      {
+        "name": "housing",
+        "type": "u1",
+        "offset": 215965
+      },
+      {
+        "name": "loan",
+        "type": "u1",
+        "offset": 259158
+      },
+      {
+        "name": "contact",
+        "type": "u1",
+        "offset": 302351
+      },
+      {
+        "name": "month",
+        "type": "u1",
+        "offset": 345544
+      },
+      {
+        "name": "poutcome",
+        "type": "u1",
+        "offset": 388737
+      },
+      {
+        "name": "previous",
+        "type": "u1",
+        "offset": 431930
+      },
+      {
+        "name": "y",
+        "type": "u1",
+        "offset": 475123
+      },
+      {
+        "name": "duration",
+        "type": "u2",
+        "offset": 518316
+      },
+      {
+        "name": "pdays",
+        "type": "i2",
+        "offset": 604702
+      },
+      {
+        "name": "balance",
+        "type": "i4",
+        "offset": 691088
+      }
+    ]
+  },
+  "categories": {
+    "job": [
+      "admin.",
+      "blue-collar",
+      "entrepreneur",
+      "housemaid",
+      "management",
+      "retired",
+      "self-employed",
+      "services",
+      "student",
+      "technician",
+      "unemployed"
+    ],
+    "marital": [
+      "divorced",
+      "married",
+      "single"
+    ],
+    "education": [
+      "primary",
+      "secondary",
+      "tertiary"
+    ],
+    "default": [
+      "no",
+      "yes"
+    ],
+    "housing": [
+      "no",
+      "yes"
+    ],
+    "loan": [
+      "no",
+      "yes"
+    ],
+    "contact": [
+      "cellular",
+      "telephone"
+    ],
+    "poutcome": [
+      "failure",
+      "other",
+      "success"
+    ],
+    "month": [
+      "jan",
+      "feb",
+      "mar",
+      "apr",
+      "may",
+      "jun",
+      "jul",
+      "aug",
+      "sep",
+      "oct",
+      "nov",
+      "dec"
+    ]
+  },
+  "cleaning": {
+    "steps": [
+      {
+        "step": "loaded bank-full.csv",
+        "rows": 45211
+      },
+      {
+        "step": "dropped campaign and day",
+        "rows": 45211
+      },
+      {
+        "step": "removed unknown job",
+        "rows": 44923,
+        "removed": 288
+      },
+      {
+        "step": "removed unknown education",
+        "rows": 43193,
+        "removed": 1730
+      },
+      {
+        "step": "reassigned unknown contact in proportion",
+        "rows": 43193,
+        "reassigned": 12286
+      },
+      {
+        "step": "poutcome unknown folded into other",
+        "rows": 43193
+      }
+    ],
+    "sourceRows": 45211
+  },
+  "overall": {
+    "rows": 43193,
+    "subscribed": 5021,
+    "subscriptionRate": 0.1162,
+    "meanBalance": 1354.03,
+    "medianBalance": 442.0,
+    "meanDuration": 258.32
+  },
+  "models": [
+    {
+      "name": "Logistic regression",
+      "note": "Scaled features, 1000 iterations.",
+      "accuracy": 0.9029,
+      "precision": 0.6476,
+      "recall": 0.3606,
+      "f1": 0.4632,
+      "rocAuc": 0.9095,
+      "testRows": 8639
+    },
+    {
+      "name": "Decision tree",
+      "note": "Unpruned, on unscaled features.",
+      "accuracy": 0.8679,
+      "precision": 0.436,
+      "recall": 0.4651,
+      "f1": 0.4501,
+      "rocAuc": 0.693,
+      "testRows": 8639
+    },
+    {
+      "name": "Gradient boosting",
+      "note": "Scikit-learn defaults, scaled features.",
+      "accuracy": 0.9051,
+      "precision": 0.6429,
+      "recall": 0.4124,
+      "f1": 0.5024,
+      "rocAuc": 0.9162,
+      "testRows": 8639,
+      "topFeatures": [
+        {
+          "feature": "duration",
+          "importance": 0.5046
+        },
+        {
+          "feature": "poutcome_success",
+          "importance": 0.1969
+        },
+        {
+          "feature": "pdays",
+          "importance": 0.0698
+        },
+        {
+          "feature": "housing_yes",
+          "importance": 0.0492
+        },
+        {
+          "feature": "age",
+          "importance": 0.0464
+        },
+        {
+          "feature": "month_mar",
+          "importance": 0.0456
+        },
+        {
+          "feature": "month_oct",
+          "importance": 0.0161
+        },
+        {
+          "feature": "month_sep",
+          "importance": 0.0132
+        },
+        {
+          "feature": "balance",
+          "importance": 0.0096
+        },
+        {
+          "feature": "month_may",
+          "importance": 0.0079
+        }
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "name": "Balance by previous outcome",
+      "test": "Welch t-test",
+      "detail": "Mean balance of contacts whose last campaign succeeded against those where it failed.",
+      "statistic": 4.2858,
+      "pValue": 1.913e-05,
+      "n": 6133
+    },
+    {
+      "name": "Job against subscription",
+      "test": "Chi-squared",
+      "detail": "Whether subscription rate is independent of job.",
+      "statistic": 772.4886,
+      "pValue": 1.69e-159,
+      "dof": 10,
+      "n": 43193
+    },
+    {
+      "name": "Education against subscription",
+      "test": "Chi-squared",
+      "detail": "Whether subscription rate is independent of education.",
+      "statistic": 233.4007,
+      "pValue": 2.078e-51,
+      "dof": 2,
+      "n": 43193
+    },
+    {
+      "name": "Housing loan against subscription",
+      "test": "Chi-squared",
+      "detail": "Whether subscription rate is independent of housing loan.",
+      "statistic": 825.2788,
+      "pValue": 1.722e-181,
+      "dof": 1,
+      "n": 43193
+    },
+    {
+      "name": "Previous outcome against subscription",
+      "test": "Chi-squared",
+      "detail": "Whether subscription rate is independent of previous outcome.",
+      "statistic": 4027.7237,
+      "pValue": 0.0,
+      "dof": 2,
+      "n": 43193
+    }
+  ]
+}
