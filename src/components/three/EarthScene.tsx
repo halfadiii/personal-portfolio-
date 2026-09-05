@@ -457,7 +457,23 @@ const AIR_FRAG = /* glsl */ `
 
     colour *= uExposure;
     colour = colour / (colour + vec3(0.9));
-    gl_FragColor = vec4(pow(clamp(colour, 0.0, 1.0), vec3(0.92)), 1.0);
+    vec3 glow = pow(clamp(colour, 0.0, 1.0), vec3(0.92));
+
+    /*
+     * Alpha is the light this actually adds, not 1.
+     *
+     * The blend adds both colour and alpha, so writing 1 here made the canvas
+     * opaque across the whole shell — a disc 13% wider than the planet — even
+     * out at the edge where the exponential has long since fallen to nothing
+     * and the shader is contributing pure black. Nothing behind the globe could
+     * be seen through that ring: the star field lost a band around the limb,
+     * and once the moon started coming out from *behind* the planet it spent
+     * the first part of its arc hidden by black glass.
+     *
+     * Tying it to the brightest channel makes the shell transparent exactly
+     * where it is dark, which is the only place it was ever wrong.
+     */
+    gl_FragColor = vec4(glow, max(max(glow.r, glow.g), glow.b));
   }
 `;
 
