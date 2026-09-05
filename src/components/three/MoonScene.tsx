@@ -285,7 +285,17 @@ const MOON_FRAG = /* glsl */ `
   }
 `;
 
-/** Generates the surface once, six faces of it, and hands back the cube. */
+/**
+ * Generates the surface once, six faces of it, and hands back the cube.
+ *
+ * All six in one `CubeCamera.update`, deliberately. Rendering them one per
+ * frame was tried, to break up the block this costs, and it produced a cube
+ * with flat panels and hard seams down it — `update` does more for the rig than
+ * setting a render target six times, and reproducing it by hand was not worth
+ * the picture it gave back. It also did not help: measured either way, the
+ * stall on first approach stayed where it was, because the cost is the globe's
+ * shaders and not this.
+ */
 function useBakedSurface(relief: number) {
   const gl = useThree((state) => state.gl);
   const [surface, setSurface] = useState<THREE.CubeTexture | null>(null);
@@ -417,20 +427,53 @@ function Moon({
  * so the camera sits on the axis instead and the box is square. Same scene,
  * same cost per pixel; only where the camera stands changes.
  */
-function Frame({ halfHeight, centred }: { halfHeight: number; centred: boolean }) {
+function Frame({
+  halfHeight,
+  centred,
+  fillRef,
+}: {
+  halfHeight: number;
+  centred: boolean;
+  fillRef?: React.RefObject<number>;
+}) {
   const camera = useThree((state) => state.camera);
   const size = useThree((state) => state.size);
+  const applied = useRef({ half: -1, w: -1, h: -1 });
 
-  useEffect(() => {
+  /*
+   * Set from the loop rather than from an effect, because the caller may be
+   * changing it every frame.
+   *
+   * The relay grows and shrinks this body all the way across the page, and the
+   * obvious way to do that — a CSS scale on the canvas — cannot work here: the
+   * size of an R3F canvas comes from `getBoundingClientRect`, which a transform
+   * changes, so scaling it makes the renderer believe the canvas itself
+   * resized. It then reallocates the drawing buffer, on every frame of the
+   * journey, and if it happens to measure while the scale is small the buffer
+   * stays small and the moon is soft for the rest of the sequence.
+   *
+   * So the element keeps one layout size and the *camera* does the scaling.
+   * `fill` is how much of the canvas the disc should cover, which makes the
+   * relationship to the frustum a division and nothing more.
+   */
+  useFrame(() => {
+    const fill = fillRef?.current;
+    const half = fill && fill > 0.001 ? 1 / fill : halfHeight;
+    const seen = applied.current;
+    if (half === seen.half && size.width === seen.w && size.height === seen.h) return;
+    seen.half = half;
+    seen.w = size.width;
+    seen.h = size.height;
+
     const ortho = camera as THREE.OrthographicCamera;
-    const halfWidth = halfHeight * (size.width / Math.max(size.height, 1));
+    const halfWidth = half * (size.width / Math.max(size.height, 1));
     ortho.left = -halfWidth;
     ortho.right = halfWidth;
-    ortho.top = halfHeight;
-    ortho.bottom = -halfHeight;
+    ortho.top = half;
+    ortho.bottom = -half;
     ortho.position.set(centred ? 0 : -halfWidth, 0, 4);
     ortho.updateProjectionMatrix();
-  }, [camera, size, halfHeight, centred]);
+  });
 
   return null;
 }
@@ -440,6 +483,7 @@ export default function MoonScene({
   drift = false,
   full = false,
   running = true,
+  fillRef,
 }: {
   /** 0 at new, 0.5 at full. */
   phase: number;
@@ -456,6 +500,11 @@ export default function MoonScene({
    * it has to be told.
    */
   running?: boolean;
+  /**
+   * How much of the canvas the disc should fill, 0..1, read every frame. Left
+   * out, the scene frames itself the way it always has.
+   */
+  fillRef?: React.RefObject<number>;
 }) {
   const pointer = useRef({ x: 0, y: 0 });
 
@@ -480,11 +529,26 @@ export default function MoonScene({
       dpr={[1, 2]}
       gl={{ antialias: true, powerPreference: "high-performance", alpha: true }}
       orthographic
+      /*
+       * Do not re-measure this canvas on scroll.
+       *
+       * react-use-measure, which is what sizes an R3F canvas, re-reads
+       * `getBoundingClientRect` on every scroll by default — and that rect is
+       * affected by transforms. The relay moves and scales this element with a
+       * transform on every frame of the handover, so the measured size wobbled
+       * with it and the drawing buffer was reallocated sixty-odd times in a
+       * single pass, each one a React render and a rebuilt camera. Layout is
+       * what decides the buffer here, and layout does not change on scroll.
+       *
+       * Safe because nothing in this scene answers a pointer: the rect is only
+       * needed to turn a page coordinate into a canvas one.
+       */
+      resize={{ scroll: false }}
       camera={{ position: [0, 0, 4], near: 0.1, far: 20 }}
       onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
     >
       <Cadence running={running} />
-      <Frame halfHeight={1.12} centred={full} />
+      <Frame halfHeight={1.12} centred={full} fillRef={fillRef} />
       <Moon phase={phase} pointer={pointer} drift={drift} />
     </Canvas>
   );

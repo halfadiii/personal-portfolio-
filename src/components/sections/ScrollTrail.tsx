@@ -60,6 +60,8 @@ export type TrailSceneComponent = React.ComponentType<{
   /** Optional: a scene that lets the section reframe it during a handover. */
   frameRef?: React.RefObject<{ scale: number; x: number; y: number }>;
   running: boolean;
+  /** Optional: how often it should draw. */
+  fps?: number;
 }>;
 
 export type Chapter = {
@@ -103,6 +105,19 @@ export function ScrollTrail({
   /** Written every frame, read by the scene. Never causes a render. */
   const frameRef = useRef({ scale: 1, x: 0.71, y: 0.5 });
   const moonBox = useRef<HTMLDivElement>(null);
+  /**
+   * The moon's canvas is one fixed size and gets there by transform.
+   *
+   * Writing its width and height every frame is a layout every frame, and
+   * behind that a resize observer, a React render and a rebuilt camera — the
+   * canvas was reallocated fifty times in a single pass over the section.
+   * Sized once for the largest disc the sequence will ask for, and scaled from
+   * there, none of that happens: the whole journey is one transform, which the
+   * compositor animates at whatever rate the display runs at.
+   */
+  const moonSpan = useRef(0);
+  /** What fraction of that canvas the disc should cover, read by the scene. */
+  const moonFill = useRef(0.893);
   /** The moon being held back, and whether it currently is. */
   const held = useRef<Element | null>(null);
   const heldOn = useRef(false);
@@ -119,6 +134,16 @@ export function ScrollTrail({
   const [moonLive, setMoonLive] = useState(false);
   /** Either body on screen — which is what the copy below has to survive. */
   const [skyLive, setSkyLive] = useState(false);
+  /**
+   * True only while the scroll is actually moving the globe.
+   *
+   * The 60fps cap is deliberate and stays for the rest of the section: the
+   * planet turns once a day and a faster loop buys a picture nobody can tell
+   * apart, at a cost in heat and then in clock speed. It is only wrong for the
+   * handover, where the camera is being driven straight off the scroll — and
+   * that is a couple of screens of scrolling, not the whole page.
+   */
+  const [chasing, setChasing] = useState(false);
   const [active, setActive] = useState(0);
   const [mounted, setMounted] = useState(false);
   // Latched, never unset: a canvas that has been built is cheap to keep and
@@ -297,11 +322,25 @@ export function ScrollTrail({
     const disc = moonBox.current;
     if (disc) {
       if (moon && moonOn > 0.002) {
+        // Big enough for the largest disc on this screen: the hero pose, or the
+        // one it is handed over to, whichever wins. Only ever downscaled from
+        // there, so it never softens.
+        const span = Math.ceil(
+          Math.max(Math.min(view.w, view.h) * 0.8, target ? target.d : 0),
+        );
+        if (span !== moonSpan.current) {
+          moonSpan.current = span;
+          disc.style.width = `${span}px`;
+          disc.style.height = `${span}px`;
+        }
         disc.style.visibility = "visible";
         disc.style.opacity = String(moonOn);
-        disc.style.width = `${moon.d}px`;
-        disc.style.height = `${moon.d}px`;
-        disc.style.transform = `translate3d(${moon.x - moon.d / 2}px, ${moon.y - moon.d / 2}px, 0)`;
+        /* Translation only. A scale here would be read back by the renderer as
+           the canvas having resized — see the note in MoonScene's Frame — so
+           the size goes to the camera instead, and this box never changes
+           shape from the day it is laid out. */
+        moonFill.current = moon.d / span;
+        disc.style.transform = `translate3d(${moon.x - span / 2}px, ${moon.y - span / 2}px, 0)`;
         /* Brightness, not opacity: see sky-relay. A see-through moon in front
            of the Earth undoes the one thing the sequence is saying. */
         disc.style.filter = moon.brightness < 0.999 ? `brightness(${moon.brightness})` : "";
@@ -332,6 +371,10 @@ export function ScrollTrail({
       held.current = waiting;
       heldOn.current = inbound;
     }
+
+    // Being reframed, rather than merely being on screen.
+    const driven = live && place.earth.scale < 0.999;
+    setChasing((current) => (current === driven ? current : driven));
 
     setSceneLive((current) => (current === live ? current : live));
     setMoonLive((current) =>
@@ -453,6 +496,7 @@ export function ScrollTrail({
             frameRef={frameRef}
             pointerRef={pointerRef}
             running={sceneLive}
+            fps={chasing ? 240 : 60}
           />
         </div>
       ) : null}
@@ -475,7 +519,13 @@ export function ScrollTrail({
           className="pointer-events-none fixed top-0 left-0"
           style={{ opacity: 0, visibility: "hidden", zIndex: -6 }}
         >
-          <MoonScene phase={phase} full running={moonLive} drift={!pointerFine} />
+          <MoonScene
+            phase={phase}
+            full
+            running={moonLive}
+            drift={!pointerFine}
+            fillRef={moonFill}
+          />
         </div>
       ) : null}
 

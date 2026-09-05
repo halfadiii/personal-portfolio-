@@ -596,6 +596,17 @@ export type EarthSceneProps = {
   pointerRef: React.RefObject<{ x: number; y: number; on: number }>;
   /** False once the section has been scrolled past; stops the render loop. */
   running: boolean;
+  /**
+   * How often to draw.
+   *
+   * Sixty is right for this scene at rest: the globe turns once a day and the
+   * sun creeps, and nothing there is worth more frames than that on a panel
+   * running at three times the rate. It is wrong while something outside is
+   * moving the camera with the scroll — a position updated sixty times a second
+   * against a page scrolling a hundred and eighty is a judder you can see,
+   * because the type beside it is moving smoothly and the planet is not.
+   */
+  fps?: number;
 };
 
 export default function EarthScene({
@@ -603,6 +614,7 @@ export default function EarthScene({
   frameRef,
   pointerRef,
   running,
+  fps,
 }: EarthSceneProps) {
   return (
     <Canvas
@@ -617,8 +629,23 @@ export default function EarthScene({
       gl={{ antialias: true, powerPreference: "high-performance", alpha: true }}
       camera={{ fov: LENS, near: 0.1, far: 40, position: [0, 0.9, RANGE.far] }}
       onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
+      /*
+       * Do not re-measure this canvas on scroll.
+       *
+       * react-use-measure, which is what sizes an R3F canvas, re-reads
+       * `getBoundingClientRect` on every scroll by default — and that rect is
+       * affected by transforms. The relay moves and scales this element with a
+       * transform on every frame of the handover, so the measured size wobbled
+       * with it and the drawing buffer was reallocated sixty-odd times in a
+       * single pass, each one a React render and a rebuilt camera. Layout is
+       * what decides the buffer here, and layout does not change on scroll.
+       *
+       * Safe because nothing in this scene answers a pointer: the rect is only
+       * needed to turn a page coordinate into a canvas one.
+       */
+      resize={{ scroll: false }}
     >
-      <Cadence running={running} />
+      <Cadence running={running} fps={fps} />
       <Globe
         progressRef={progressRef}
         frameRef={frameRef}
@@ -795,12 +822,29 @@ function Globe({
     const surface = surfaceMat.current;
     if (surface) {
       surface.uniforms.uSun.value.copy(sun);
-      if (maps && !surface.uniforms.uDay.value) {
-        surface.uniforms.uDay.value = maps.day;
-        surface.uniforms.uNight.value = maps.night;
-        surface.uniforms.uMask.value = maps.mask;
-        surface.uniforms.uMaskTexel.value = 1 / widthOf(maps.mask);
-        surface.needsUpdate = true;
+      /*
+       * One map per frame, not three.
+       *
+       * Handing a texture to a material is where it actually reaches the GPU:
+       * eight million texels uploaded and a mip chain built for each, on the
+       * thread that is also running the scroll. All three at once measured at
+       * 129ms of blocked main thread on first draw — the largest stall left on
+       * the page, and it landed wherever the visitor happened to be scrolling.
+       * Taken one at a time it is the same total work spread across three
+       * frames, and the globe is not on screen yet for any of them.
+       */
+      if (maps) {
+        if (!surface.uniforms.uDay.value) {
+          surface.uniforms.uDay.value = maps.day;
+          surface.needsUpdate = true;
+        } else if (!surface.uniforms.uNight.value) {
+          surface.uniforms.uNight.value = maps.night;
+          surface.needsUpdate = true;
+        } else if (!surface.uniforms.uMask.value) {
+          surface.uniforms.uMask.value = maps.mask;
+          surface.uniforms.uMaskTexel.value = 1 / widthOf(maps.mask);
+          surface.needsUpdate = true;
+        }
       }
     }
     if (cloudMat.current) {

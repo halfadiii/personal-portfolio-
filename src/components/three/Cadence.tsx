@@ -36,6 +36,11 @@ export function Cadence({
   fps = 60,
   running = true,
 }: {
+  /**
+   * Frames a second. Anything at or above the panel's own rate means "every
+   * refresh", which is what scroll-linked motion needs: the page moves on every
+   * one of them, so a scene that answers on one in three visibly lags it.
+   */
   fps?: number;
   /** An extra gate for sections that know they are done with their scene. */
   running?: boolean;
