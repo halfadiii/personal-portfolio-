@@ -23,8 +23,9 @@ export const projects: Project[] = [
     slug: "bank-marketing-strategy",
     title: "Bank marketing strategy",
     hook: "43,193 telemarketing calls, normalised to 3NF, three classifiers — and a dashboard you can actually drive.",
-    // TODO — client to confirm the period this project ran.
-    period: "TODO — confirm dates",
+    // Taken from the repository: six commits, 11–17 January 2025. A single
+    // month rather than a range, because that is what the history supports.
+    period: "Jan 2025",
     stack: ["Python", "scikit-learn", "SQLite", "Dash", "Plotly"],
     detail: [
       "Cleaned 45,211 contacts down to 43,193: unknown job and education removed, unknown contact method reassigned in proportion to the known split, poutcome folded into a single other category.",
