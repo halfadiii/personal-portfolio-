@@ -26,8 +26,7 @@
     "gen:subway-map": "python scripts/build-subway-map.py",
     "gen:wait-snapshot": "python scripts/build-wait-snapshot.py",
     "gen:print-inspection": "python scripts/build-print-inspection.py",
-    "audit": "node scripts/audit.mjs",
-    "gen:resume": "node scripts/build-resume-pdf.mjs"
+    "audit": "node scripts/audit.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
