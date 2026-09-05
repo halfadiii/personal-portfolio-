@@ -101,8 +101,12 @@ const HANDOVER = 0.55;
  * an arc — it is the same movement it arrived on, continuing — and costs one
  * sine. Perpendicular to the line it is travelling, so it works whichever way
  * the destination happens to lie.
+ *
+ * Kept modest because it stacks with the latch below, which also pulls the
+ * Moon toward a destination that is still below the fold. Together at 0.14 they
+ * put the bottom of the disc a hundred pixels under the window.
  */
-const BOW = 0.14;
+const BOW = 0.09;
 
 /**
  * How bright the Moon is while it is still crossing the page, against the 1 it
@@ -130,6 +134,27 @@ const VEIL = 0.42;
 
 /** The last part of the journey, over which it comes up to full. */
 const UNVEIL = 0.72;
+
+/**
+ * How near the destination has to get, in viewports, before the Moon starts
+ * aiming at the live element instead of at the pose it predicts for it.
+ *
+ * This is what stops the arrival snapping. Flying the whole way to a fixed
+ * resting pose means easing to a *standstill* — smoothstep has no velocity left
+ * at the end — and the thing being landed on is not standing still: it is an
+ * element on a scrolling page, moving a pixel for every pixel of scroll. So the
+ * Moon stopped dead and the page then picked it up at full speed: nothing to
+ * twenty pixels a frame with no motion in between.
+ *
+ * Measured in distance rather than in progress, and that matters. Ramping it
+ * over the last stretch of the *journey* aims at an element still a screen and
+ * a half below the window, and the Moon sags off the bottom of the frame
+ * following it down. Ramping it over the last stretch of the *approach* bounds
+ * the sag: the pull toward the target is `r·(1 - smoothstep(0, L, r))`, which
+ * peaks at 0.096·L however far away the thing starts — 78px here, against the
+ * 370 it was diving before.
+ */
+const LATCH = 0.9;
 
 const clamp = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (v: number) => v * v * (3 - 2 * v);
@@ -260,7 +285,20 @@ export function placeSky({
     // Landed, so follow the real thing; still flying, so aim at where it will
     // be. At the moment `k` reaches 1 these are the same disc, which is what
     // makes the change of destination invisible.
-    const dest = travelled >= travel ? target : rest;
+    /*
+     * The predicted pose while the destination is far off, the live element as
+     * it arrives. They are the same disc at the moment of arrival — the lock is
+     * *defined* as the scroll position that centres the target — so the
+     * changeover has nothing to show, and the Moon inherits the element's
+     * motion rather than having to be picked up from a standstill.
+     */
+    const left = Math.max(0, travel - travelled);
+    const latch = 1 - smooth(clamp(left / (LATCH * view.h)));
+    const dest = {
+      x: mix(rest.x, target.x, latch),
+      y: mix(rest.y, target.y, latch),
+      d: mix(rest.d, target.d, latch),
+    };
     const flat = {
       x: mix(disc.x, dest.x, k),
       y: mix(disc.y, dest.y, k),
