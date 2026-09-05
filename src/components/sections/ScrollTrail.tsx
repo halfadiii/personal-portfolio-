@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useCapability } from "@/components/motion/capability";
-import { useOnScreen } from "@/components/three/useOnScreen";
 import { cn } from "@/lib/utils";
 
 /**
@@ -63,8 +62,17 @@ export function ScrollTrail({
   // Tracked on the section rather than the canvas: the chapter copy sits over
   // the left half of it, and the strand should still answer the cursor there.
   const pointerRef = useRef({ x: 0, y: 0, on: 0 });
-  const { ref: sceneBox, onScreen } = useOnScreen<HTMLDivElement>();
+  const sceneBox = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
+  /**
+   * Whether the scene is worth drawing.
+   *
+   * This used to be an IntersectionObserver on the canvas box. The box is
+   * `fixed` now — always intersecting, by construction — so the observer would
+   * answer "yes" for the entire length of the page and the globe would keep
+   * rendering behind the footer. Scroll position is the honest source.
+   */
+  const [sceneLive, setSceneLive] = useState(false);
   const [active, setActive] = useState(0);
   const [mounted, setMounted] = useState(false);
   // Latched, never unset: a canvas that has been built is cheap to keep and
@@ -128,6 +136,36 @@ export function ScrollTrail({
       railRef.current.style.transform = `scaleY(${value})`;
     }
 
+    /*
+     * How solid the globe is, either side of the pinned stretch.
+     *
+     * It used to be clipped to this section, which meant the bottom edge of the
+     * section took a straight razor through the planet on the way out — a
+     * photographic Earth cut off by a horizontal line, which reads as a broken
+     * image rather than a transition. The canvas is viewport-sized and fixed
+     * now, so instead of being cut it dims: still there behind the top of the
+     * section that follows, gone a screen later.
+     *
+     * The two ramps meet the pinned stretch exactly. `top` reaches 0 as
+     * progress starts, and `bottom` passes the fold as progress reaches 1 —
+     * `travel` is the section height less one viewport, so those are the same
+     * instant. No constant to keep in step with the layout.
+     */
+    const view = window.innerHeight;
+    const enter = Math.min(1, Math.max(0, (view - box.top) / view));
+    const leave = Math.min(1, Math.max(0, box.bottom / view));
+    const solid = Math.min(enter, leave);
+    const live = solid > 0.002;
+
+    const layer = sceneBox.current;
+    if (layer) {
+      layer.style.opacity = String(solid);
+      // Not opacity alone: a transparent full-screen canvas is still a
+      // full-screen canvas for the compositor.
+      layer.style.visibility = live ? "visible" : "hidden";
+    }
+    setSceneLive((current) => (current === live ? current : live));
+
     const next = Math.min(
       chapters.length - 1,
       Math.floor(value * chapters.length + 0.001),
@@ -156,6 +194,32 @@ export function ScrollTrail({
     };
   }, [measure]);
 
+  // The layer mounts after the section does, so it starts hidden and would stay
+  // that way until the next scroll event. Fine for someone scrolling into it,
+  // wrong for someone who arrived on an anchor and is already standing here.
+  useEffect(() => {
+    measure();
+  }, [measure, mounted, near, reducedMotion]);
+
+  /*
+   * Tell whatever section is next that it is standing in front of the globe.
+   *
+   * Measured before adding it: the last words of a body line reach far enough
+   * right to land on lit cloud, and steel type there came out at 2.2:1. The
+   * halo is the same one the chapter copy over this scene already wears, and it
+   * costs nothing to look at — a black shadow on a black background is
+   * invisible until there is something bright behind the letters.
+   *
+   * The next sibling rather than a name: this component does not know, and
+   * should not know, which section it was placed above.
+   */
+  useEffect(() => {
+    const after = section.current?.nextElementSibling;
+    if (!after) return;
+    after.toggleAttribute("data-scene-spill", sceneLive);
+    return () => after.removeAttribute("data-scene-spill");
+  }, [sceneLive]);
+
   const showScene = mounted && reducedMotion === false;
 
   return (
@@ -173,6 +237,38 @@ export function ScrollTrail({
       <h2 id={`${id}-title`} className="sr-only">
         {label}
       </h2>
+
+      {/*
+        The scene is a viewport layer, not a child of the pinned box.
+
+        Sticky ends where its section ends, so the globe was being sliced flat
+        by the section boundary on the way out. Fixed, it outlives the section:
+        it holds through the pinned chapters and then dims behind the top of
+        whatever comes next, which is what the eye expects a planet to do.
+
+        Behind the copy at `-z-[5]`, because a negative layer paints under the
+        page's in-flow content — but above the star field at `-z-10`, so this
+        still reads as being in the same sky. Opacity and visibility are set
+        from the scroll handler; the initial hidden state matters, or it flashes
+        at full strength for one frame before the first measurement lands.
+      */}
+      {showScene && near ? (
+        <div
+          ref={sceneBox}
+          aria-hidden
+          /* The canvas box is the whole scene; an outline of it is not a
+             cursor. The visuals answer the pointer themselves. */
+          data-cursor-shape="off"
+          className="pointer-events-none fixed inset-0 -z-[5]"
+          style={{ opacity: 0, visibility: "hidden" }}
+        >
+          <Scene
+            progressRef={progressRef}
+            pointerRef={pointerRef}
+            running={sceneLive}
+          />
+        </div>
+      ) : null}
 
       <div
         className={cn(
@@ -203,23 +299,6 @@ export function ScrollTrail({
           pointerRef.current.on = 0;
         }}
       >
-        {showScene && near ? (
-          <div
-            ref={sceneBox}
-            aria-hidden
-            /* The canvas box is the whole scene; an outline of it is not a
-               cursor. The visuals answer the pointer themselves. */
-            data-cursor-shape="off"
-            className="absolute inset-0"
-          >
-            <Scene
-              progressRef={progressRef}
-              pointerRef={pointerRef}
-              running={onScreen}
-            />
-          </div>
-        ) : null}
-
         {/*
           Every chapter is in the DOM at all times. Crossfading one over another
           is a treatment the pinned version can afford; everywhere else they are

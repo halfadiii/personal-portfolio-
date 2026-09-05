@@ -589,6 +589,27 @@
   color: var(--signal);
 }
 
+/* The section below the trail, for as long as the globe is still behind it.
+
+   The scene used to stop dead at the trail's bottom edge, which put a straight
+   horizontal cut through the planet. It carries on now and dims over the next
+   screen, so for that screen this section's type has a lit Earth behind it and
+   needs the same halo the chapter copy gets. Set and unset from ScrollTrail on
+   the next sibling, so nothing here has to know which section that is. */
+[data-scene-spill] :is(h2, h3, p, span, summary, li) {
+  /* Tighter than the chapter halo, and opaque, because this section's body copy
+     is steel rather than white. A single 4px shadow is too soft to darken the
+     middle of a thin stem — the blur spreads its alpha before it gets there —
+     and steel over what was left came out at 3.4:1. The 1px and 3px passes put
+     solid black under the strokes themselves; the wide ones stop the letters
+     sitting in a bright halo of their own making. */
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 1),
+    0 0 3px rgba(0, 0, 0, 1),
+    0 0 8px rgba(0, 0, 0, 0.92),
+    0 1px 14px rgba(0, 0, 0, 0.8);
+}
+
 /* The chapter markers are over the scene as well.
 
    They used to hang over a black hole and a mostly empty field, where plain

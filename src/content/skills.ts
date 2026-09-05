@@ -7,6 +7,10 @@ import type { SkillGroup } from "./types";
  * languages, and platforms sat with the AI work. Splitting analytics and
  * reporting out is the résumé's arrangement and it reads better: what he
  * builds *with* is separable from what he builds *in*.
+ *
+ * MLOps, prompt engineering and Azure are the site's, not the résumé's. A
+ * one-page résumé cuts to fit; this section has no such limit, and Aditya
+ * asked for them back after the first pass dropped them.
  */
 export const skills: SkillGroup[] = [
   {
@@ -42,6 +46,7 @@ export const skills: SkillGroup[] = [
       "Segmentation",
       "Feature engineering",
       "EDA",
+      "MLOps",
     ],
   },
   {
@@ -63,12 +68,13 @@ export const skills: SkillGroup[] = [
     items: [
       "BigQuery",
       "Snowflake",
-      "GCP/AWS",
+      "GCP/AWS/Azure",
       "PostgreSQL",
       "MySQL",
       "SQL Server",
       "LLMs",
       "RAG",
+      "Prompt engineering",
       "Vector DBs",
     ],
   },

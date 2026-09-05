@@ -56,9 +56,18 @@ export const experience: Role[] = [
       "Translated raw operational feeds into governed warehouse tables using dimensional modeling, documenting column-level lineage back to validated upstream finance sources.",
       "Produced standardized reporting packages from reconciled MySQL datasets, giving stakeholders consistent month-over-month figures and cutting historical gaps 95%.",
     ],
-    // Only what these five bullets actually name. Airflow and dbt went with the
-    // data-operations bullets the résumé drops; claiming them here would be the
-    // site asserting something the résumé no longer does.
-    stack: ["Power BI", "Excel", "BigQuery", "Spark", "MySQL"],
+    // The union of what the three merged roles ran on, not just what these five
+    // bullets happen to name. Merging the entries did not un-learn GCP, Airflow
+    // or dbt, and Aditya asked for them kept.
+    stack: [
+      "GCP",
+      "BigQuery",
+      "dbt",
+      "Airflow",
+      "Spark",
+      "Power BI",
+      "Excel",
+      "MySQL",
+    ],
   },
 ];
