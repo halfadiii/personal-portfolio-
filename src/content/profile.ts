@@ -6,8 +6,10 @@ export const profile: Profile = {
   location: "New York City, NY",
   email: "adityaaryan541@gmail.com",
   phone: "+1 (716) 697-7737",
-  // TODO — client to supply exact URLs. See src/content/README.md.
-  links: { linkedin: "TODO", github: "TODO" },
+  links: {
+    linkedin: "https://www.linkedin.com/in/halfadi/",
+    github: "https://github.com/halfadiii",
+  },
   positioning:
     "Analytics professional with a Master's in Data Science and 3+ years across BI and data engineering. Builds governed pipelines in dbt, BigQuery, and GCP, then turns them into Power BI and SQL reporting leadership acts on.",
   headlineMetrics: [

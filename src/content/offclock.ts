@@ -31,13 +31,12 @@ export const offClock: OffClockCard[] = [
     label: "currently watching",
     name: "Naruto",
     art: {
-      src: "/media/naruto.jpg",
-      alt: "Poster of Naruto Uzumaki in profile against a cream ground.",
-      // Anchored left. This card is the tall one, so on a narrow laptop it is
-      // the width that gets cropped — and the poster sets its own title down
-      // the left edge, where any crop cuts the letters in half. Taking the
-      // crop off the right instead costs some background.
-      position: "0% 28%",
+      src: "/media/naruto.webp",
+      alt: "Naruto key art: Kakashi, Sakura, Sasuke and Naruto leaping forward together.",
+      // Centred, unlike the poster this replaced. Team 7 is arranged
+      // symmetrically about Naruto, so whichever way the card crops — width on
+      // a narrow laptop, height on a phone — the middle is the part to keep.
+      position: "50% 50%",
     },
   },
   {
