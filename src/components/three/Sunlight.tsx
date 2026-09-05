@@ -49,6 +49,16 @@ export function Sunlight({
   const { camera, gl } = useThree();
   const projected = useMemo(() => new THREE.Vector3(), []);
   const targets = useRef<Target[]>([]);
+  /**
+   * The wash that carries the star's light past the section it lives in.
+   *
+   * The scene's own glow is bounded by its canvas, and the canvas is bounded by
+   * the hero, so the light had nowhere to go: it faded to black at the section's
+   * edge and the page below it began in the dark. This is the same star, written
+   * as a position for a gradient that spans further than the canvas does. It
+   * gets the coordinates and the stylesheet decides what to do with them.
+   */
+  const glow = useRef<HTMLElement | null>(null);
   const canvas = useRef<{ width: number; height: number } | null>(null);
   const last = useRef({ x: NaN, y: NaN });
 
@@ -71,6 +81,7 @@ export function Sunlight({
           strength: Number(node.dataset.sunlit) || 1,
         };
       });
+      glow.current = document.querySelector<HTMLElement>("[data-sun-glow]");
       last.current = { x: NaN, y: NaN };
     };
 
@@ -88,13 +99,16 @@ export function Sunlight({
         target.element.style.removeProperty("--ly");
         target.element.style.removeProperty("--lit");
       }
+      glow.current?.style.removeProperty("--sun-x");
+      glow.current?.style.removeProperty("--sun-y");
     };
   }, [gl]);
 
   useFrame(() => {
     const box = canvas.current;
     const sun = sunRef.current;
-    if (!box || !sun || targets.current.length === 0) return;
+    if (!box || !sun) return;
+    if (targets.current.length === 0 && !glow.current) return;
 
     projected.copy(sun).project(camera);
     const sx = ((projected.x + 1) / 2) * box.width;
@@ -110,6 +124,13 @@ export function Sunlight({
       return;
     }
     last.current = { x: sx, y: sy };
+
+    // The canvas is `inset-0` of the section, so canvas coordinates are already
+    // the coordinates the wash is positioned in.
+    if (glow.current) {
+      glow.current.style.setProperty("--sun-x", `${sx.toFixed(1)}px`);
+      glow.current.style.setProperty("--sun-y", `${sy.toFixed(1)}px`);
+    }
 
     for (const target of targets.current) {
       const dx = target.x - sx;

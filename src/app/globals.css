@@ -589,6 +589,35 @@
   color: var(--signal);
 }
 
+/* The star's reach, past the section that holds it.
+
+   Positioned from `Sunlight`, which projects the same star the planets shade
+   from, so this turns with the orbit and leans with the pointer along with
+   everything else. Very low at the centre on purpose: under the star the
+   canvas is already saturated and this adds nothing there. What it is for is
+   the long tail, which the canvas cannot draw because it runs out of canvas.
+
+   The centre defaults to the middle of the hero so that a visitor whose
+   JavaScript has not started, or whose machine never mounts the orbit, gets a
+   plausible wash rather than one pinned to the top-left corner. */
+[data-sun-glow] {
+  background: radial-gradient(
+    circle 58rem at var(--sun-x, 50%) var(--sun-y, 34%),
+    rgba(255, 146, 74, 0.1),
+    rgba(255, 116, 52, 0.045) 38%,
+    rgba(255, 96, 40, 0.014) 62%,
+    transparent 82%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Nothing writes a position in that case, and a wash centred on a guess is
+     not worth the paint. */
+  [data-sun-glow] {
+    background: none;
+  }
+}
+
 /* The page, for as long as there is a lit body behind it.
 
    The scene used to stop dead at the trail's bottom edge, which put a straight

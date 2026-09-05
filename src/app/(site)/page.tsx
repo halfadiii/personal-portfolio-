@@ -22,7 +22,23 @@ export default async function HomePage() {
       <PreloaderRunner />
       <HomeMotion />
 
-      <Hero caseStudies={caseStudies} />
+      {/*
+        The star's light, carried past the section that holds it.
+
+        The orbit's canvas is `inset-0` of the hero and the hero clips, so the
+        scene's own glow has to stop at that edge and the page below it starts in
+        the dark. This wash is anchored on the same star — `Sunlight` writes the
+        position — and reaches a long way further down, so what ends at the
+        boundary is the picture, not the light.
+      */}
+      <div className="relative">
+        <div
+          aria-hidden
+          data-sun-glow
+          className="pointer-events-none absolute inset-x-0 top-0 -z-[5] h-[calc(100%+62vh)]"
+        />
+        <Hero caseStudies={caseStudies} />
+      </div>
       <SelectedWork caseStudies={caseStudies} />
       <ScrollTrail
         chapters={trailChapters}
