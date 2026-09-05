@@ -10,12 +10,19 @@ import type { Role } from "./types";
  * PDF in the same minute, so the two cannot disagree about where he worked.
  *
  * Bullets are the résumé's, in this file's house style: `%` rather than the
- * word, since every other bullet on the site is written that way.
+ * word, since every other bullet on the site is written that way. Titles are
+ * sentence case for the same reason — every project title and section heading
+ * on the site is, and three roles in title case would sit oddly above them.
+ *
+ * Two titles are deliberately not the résumé's, on Aditya's instruction as of
+ * 2026-09-05: Nissha reads "Data engineer" here against the PDF's "Data
+ * Analytics & Computer Vision Capstone", and Google reads "analyst" against its
+ * "specialist". He knows; the PDF is his to reissue.
  */
 export const experience: Role[] = [
   {
     org: "Nissha Medical Technologies",
-    title: "Data analytics & computer vision capstone",
+    title: "Data engineer",
     location: "Buffalo, NY",
     start: "2025-05",
     end: "2025-12",
@@ -45,7 +52,7 @@ export const experience: Role[] = [
   },
   {
     org: "Google",
-    title: "Data analytics & reporting specialist",
+    title: "Data analytics & reporting analyst",
     location: "Remote",
     start: "2022-06",
     end: "2024-03",
