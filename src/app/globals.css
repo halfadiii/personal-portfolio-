@@ -448,6 +448,21 @@
   will-change: transform;
 }
 
+/*
+  The deck, on a phone.
+
+  A shadow under each card, so the strip of the one behind sits in the shade of
+  the one in front. That is what makes a pile read as a pile rather than as
+  cards that happen to overlap — and it does the same job at the other end of
+  the animation, lifting each card off the moon once they have come apart.
+
+  Static: it is the same shadow at every point in the scroll, so nothing here
+  is repainted while it plays.
+*/
+[data-deck] > * {
+  box-shadow: 0 8px 20px -6px rgb(0 0 0 / 0.75);
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-bento] > * {
     transition: none;
@@ -563,10 +578,22 @@
 }
 
 /* The kicker and the figure label are `label-mono`, which is steel by
-   default — small, thin, and sitting directly on the brightest part of an
-   accretion disc. They come up too. */
+   default — small, thin, and sitting directly on the brightest part of the
+   scene behind them. They come up too. */
 [data-trail-copy] .label-mono {
   color: var(--signal);
+}
+
+/* The chapter markers are over the scene as well.
+
+   They used to hang over a black hole and a mostly empty field, where plain
+   steel was enough. A lit globe can put a bright desert directly behind them,
+   and a marker is a few pixels of monospace with nowhere to hide — so they
+   get the same halo the copy does. */
+[data-trail-marker] {
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 0.92),
+    0 1px 10px rgba(0, 0, 0, 0.8);
 }
 
 /* --------------------------------------------------------------------------

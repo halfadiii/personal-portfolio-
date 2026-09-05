@@ -44,19 +44,6 @@ const CLOSE_DISTANCE = 1.45;
 const FLY_SECONDS = 1.05;
 
 /**
- * The dive into the star, which is a different move from the fly-in to a planet.
- *
- * A planet is a thing to stop in front of, so that move ends a fixed distance
- * short of it. The star is a thing to go into: the overlay takes the screen a
- * little over half a second in, so what this has to do is not arrive anywhere
- * but commit — leave, fast, in the right direction, and still be accelerating
- * when the black covers it. Stopping short would show the camera settling into
- * a shot nobody is going to see.
- */
-const DIVE_DISTANCE = 0.42;
-const DIVE_SECONDS = 0.9;
-
-/**
  * How to frame a ring in a window of a given shape.
  *
  * The scene was composed in landscape, where a ring three and a half units
@@ -87,11 +74,31 @@ const WIDE = {
   look: 0.35,
   edge: 0.55,
 };
+/*
+ * Portrait.
+ *
+ * `radius` and `fill` both went up here, and they do different jobs. `fill` is
+ * how much of the frame the ring *plus its clearance* is asked to occupy, and
+ * at 0.94 it was leaving a twentieth of the width empty on top of the
+ * clearance itself. `radius` is what actually decides how big the circle looks:
+ * the distance is solved from it, so a wider ring against the same clearance is
+ * a larger fraction of the frame — 2.35 against a 0.9 reserve put the orbit
+ * path at 68 per cent of the half-width, and everything past that was air.
+ *
+ * The reserve stays at 0.9 because it is not slack. Planets are the same
+ * absolute size whatever the ring does, and a featured one with a ring reaches
+ * 2.7 of its own radii, or 0.81 — so 0.9 is that plus a little, and cutting it
+ * would clip the ring off a planet every time one came round the side.
+ *
+ * The camera also climbs further. A portrait frame has height to spend and the
+ * ring is nearly edge-on from low down; opening it out uses the vertical space
+ * the old shot was leaving empty above and below a thin band.
+ */
 const TALL = {
   fov: 62,
-  radius: 2.35,
-  fill: 0.94,
-  eye: 3.9,
+  radius: 3.05,
+  fill: 1.0,
+  eye: 4.5,
   look: 0.55,
   edge: 0.9,
 };
@@ -149,16 +156,6 @@ export type HeroSceneProps = {
   focused: number | null;
   onFrontChange: (index: number) => void;
   onSelect: (index: number) => void;
-  /** The star has been clicked: dive into it rather than turning the ring. */
-  starred: boolean;
-  onSelectStar: () => void;
-  /**
-   * Stop drawing entirely. Set once the star's overlay is opaque — there is a
-   * second canvas on top of this one by then, and rendering a system nobody
-   * can see while a full-screen sun is being drawn over it is the one moment
-   * this page could ask a laptop for two scenes at once.
-   */
-  paused: boolean;
   /** Called when a drag starts, so a focused project lets go of the camera. */
   onDismiss: () => void;
   /** Set by the parent's keyboard controls; consumed and cleared each frame. */
@@ -170,9 +167,6 @@ export default function HeroScene({
   focused,
   onFrontChange,
   onSelect,
-  starred,
-  onSelectStar,
-  paused,
   onDismiss,
   stepRef,
 }: HeroSceneProps) {
@@ -187,8 +181,6 @@ export default function HeroScene({
   // Read per frame by the rig; prop changes must not wait on a render.
   const focusedRef = useRef(false);
   focusedRef.current = focused !== null;
-  const starredRef = useRef(false);
-  starredRef.current = starred;
   const velocityRef = useRef(0);
   const pointerRef = useRef(new THREE.Vector2(0, 0));
   const draggingRef = useRef(false);
@@ -324,15 +316,13 @@ export default function HeroScene({
           setReady(true);
         }}
       >
-        <Cadence running={onScreen && !paused} />
+        <Cadence running={onScreen} />
         <Frame onChange={setFraming} />
 
         <Rig
           framing={framing}
           focusRef={focusRef}
           focusedRef={focusedRef}
-          starredRef={starredRef}
-          sunRef={sunRef}
           angleRef={angleRef}
           targetRef={targetRef}
           velocityRef={velocityRef}
@@ -353,7 +343,6 @@ export default function HeroScene({
           focusRef={focusRef}
           onFront={onFrontChange}
           onSelect={handleSelect}
-          onSelectStar={onSelectStar}
         />
 
         <Sunlight sunRef={sunRef} />
@@ -399,8 +388,6 @@ function Rig({
   framing,
   focusRef,
   focusedRef,
-  starredRef,
-  sunRef,
   angleRef,
   targetRef,
   velocityRef,
@@ -412,8 +399,6 @@ function Rig({
   framing: Framing;
   focusRef: React.RefObject<THREE.Vector3>;
   focusedRef: React.RefObject<boolean>;
-  starredRef: React.RefObject<boolean>;
-  sunRef: React.RefObject<THREE.Vector3>;
   angleRef: React.RefObject<number>;
   targetRef: React.RefObject<number | null>;
   velocityRef: React.RefObject<number>;
@@ -428,10 +413,7 @@ function Rig({
       home: new THREE.Vector3(),
       want: new THREE.Vector3(),
       look: new THREE.Vector3(),
-      // Where the camera actually ends up, before the dive is folded in.
       place: new THREE.Vector3(),
-      // The point inside the star the dive is heading for.
-      into: new THREE.Vector3(),
     }),
     [],
   );
@@ -442,8 +424,6 @@ function Rig({
    * rate, and reverses cleanly from wherever it had got to.
    */
   const flight = useRef(0);
-  /** The same, for the dive into the star. */
-  const dive = useRef(0);
 
   useFrame((_, delta) => {
     const frames = Math.min(delta * 60, 3);
@@ -465,7 +445,7 @@ function Rig({
       } else {
         angleRef.current += remaining * (1 - Math.exp(-4.2 * delta));
       }
-    } else if (!draggingRef.current && !focusedRef.current && !starredRef.current) {
+    } else if (!draggingRef.current && !focusedRef.current) {
       // Held still while a project is being looked at. The drift would
       // otherwise carry the planet out from under the camera, and eventually
       // hand the front of the ring to its neighbour in the middle of the shot.
@@ -515,26 +495,6 @@ function Rig({
 
     aim.place.lerpVectors(aim.home, aim.want, near);
     aim.look.set(0, framing.look, 0).lerp(focus, near);
-
-    // And then the dive, which runs on top of whatever the rest of the rig
-    // decided. Composed rather than branched: clicking the star while a planet
-    // is open should leave that shot and go, not cut.
-    const towardsStar = starredRef.current ? 1 : -1;
-    dive.current = Math.min(
-      1,
-      Math.max(0, dive.current + (towardsStar * delta) / DIVE_SECONDS),
-    );
-    if (dive.current > 0) {
-      const star = sunRef.current;
-      const deep = ease(dive.current);
-      // A point just inside the star, on the line the camera is already on, so
-      // the move is a straight run in rather than a swing around.
-      aim.into.copy(aim.place).sub(star);
-      const reach = aim.into.length() || 1;
-      aim.into.multiplyScalar(DIVE_DISTANCE / reach).add(star);
-      aim.place.lerp(aim.into, deep);
-      aim.look.lerp(star, deep);
-    }
 
     camera.position.copy(aim.place);
     camera.lookAt(aim.look);

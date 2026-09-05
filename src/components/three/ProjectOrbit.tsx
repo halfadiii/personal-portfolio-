@@ -54,8 +54,6 @@ export type OrbitProps = {
   /** Index currently at the front of the ring, written each frame. */
   onFront: (index: number) => void;
   onSelect: (index: number) => void;
-  /** Clicking the star, which opens it rather than turning the ring. */
-  onSelectStar: () => void;
   /** How wide the ring is, in world units. Set by whatever can frame it. */
   radius?: number;
 };
@@ -68,7 +66,6 @@ export function ProjectOrbit({
   focusRef,
   onFront,
   onSelect,
-  onSelectStar,
   radius = RADIUS,
 }: OrbitProps) {
   const ring = useRef<THREE.Group>(null);
@@ -111,11 +108,7 @@ export function ProjectOrbit({
   return (
     // Lifted so the near edge of the ring clears the caption beneath it.
     <group ref={plane} rotation={[TILT, 0, 0]} position={[0, 0.55, 0]}>
-      <Sun
-        positionRef={sunRef}
-        pointerRef={pointerRef}
-        onSelect={onSelectStar}
-      />
+      <Sun positionRef={sunRef} pointerRef={pointerRef} />
       <OrbitPath radius={radius} />
       <group ref={ring}>
         {projects.map((project, i) => (

@@ -17,6 +17,7 @@
     "test:a11y": "playwright test tests/a11y.spec.ts",
     "shots": "node scripts/shoot.mjs",
     "gen:sounds": "node scripts/make-ui-sounds.mjs",
+    "gen:earth": "node scripts/build-earth-maps.mjs",
     "analyze": "cross-env ANALYZE=true next build",
     "gen:fonts": "python scripts/subset-fonts.py",
     "measure:vitals": "node scripts/measure-vitals.mjs",

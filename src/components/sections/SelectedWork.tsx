@@ -45,7 +45,7 @@ export function SelectedWork({ caseStudies }: { caseStudies: string[] }) {
         <div className="shell">
           <SectionHeading
             id="work"
-            index="03"
+            index="02"
             label="selected work"
             meta="2022–2026"
             /* Counted, not typed: the heading said six while the orbit

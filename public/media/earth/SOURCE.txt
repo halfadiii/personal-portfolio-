@@ -1,0 +1,14 @@
+Earth maps for the scroll section.
+
+day.webp    NASA Blue Marble Next Generation — land surface, shallow water,
+            shaded topography.
+            https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_8192.tif
+cloud.webp  NASA Blue Marble — combined cloud cover.
+            https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57747/cloud_combined_8192.tif
+night.webp  NASA Black Marble 2012 — day/night band, city lights.
+            https://eoimages.gsfc.nasa.gov/images/imagerecords/79000/79765/dnb_land_ocean_ice.2012.13500x6750.jpg
+mask.webp   Derived here from day.webp. R water, G relief, B ice.
+
+NASA imagery is not copyrighted and may be used without permission. See
+https://www.nasa.gov/nasa-brand-center/images-and-media/
+Regenerate with: npm run gen:earth  (scripts/build-earth-maps.mjs)

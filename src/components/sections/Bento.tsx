@@ -29,13 +29,26 @@ const GROW = 1.015;
 export function Bento({
   className,
   children,
+  interactive = true,
+  gridRef,
 }: {
   className?: string;
   children: React.ReactNode;
+  /*
+   * Off while something else owns these cards' transforms.
+   *
+   * The nudge writes `transform` on every child and `[data-bento] > *` puts a
+   * transition on it. Anything else driving the same property — the deck a
+   * phone gets, which sets it every frame — would be fighting this one for the
+   * style and being smoothed by its easing on the way.
+   */
+  interactive?: boolean;
+  /** For whoever is driving the cards instead. */
+  gridRef?: React.RefObject<HTMLDivElement | null>;
 }) {
   const grid = useRef<HTMLDivElement>(null);
   const { pointerFine, reducedMotion } = useCapability();
-  const enabled = pointerFine && reducedMotion === false;
+  const enabled = interactive && pointerFine && reducedMotion === false;
 
   useEffect(() => {
     const node = grid.current;
@@ -106,7 +119,14 @@ export function Bento({
   }, [enabled]);
 
   return (
-    <div ref={grid} data-bento={enabled ? "" : undefined} className={className}>
+    <div
+      ref={(node) => {
+        grid.current = node;
+        if (gridRef) gridRef.current = node;
+      }}
+      data-bento={enabled ? "" : undefined}
+      className={className}
+    >
       {children}
     </div>
   );

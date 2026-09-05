@@ -30,7 +30,14 @@ const MoonScene = dynamic(() => import("@/components/three/MoonScene"), {
   ssr: false,
 });
 
-export function SkyBody({ className }: { className?: string }) {
+export function SkyBody({
+  className,
+  full = false,
+}: {
+  className?: string;
+  /** The whole disc, centred — how it is used as a backdrop on a phone. */
+  full?: boolean;
+}) {
   const [now, setNow] = useState<Date | null>(null);
   const { richMotion, pointerFine } = useCapability();
   const { ref, onScreen } = useOnScreen<HTMLDivElement>("400px");
@@ -69,12 +76,19 @@ export function SkyBody({ className }: { className?: string }) {
       ref={ref}
       role={show ? "img" : undefined}
       aria-label={show ? label : undefined}
-      // Half as wide as it is tall: the scene draws the left half of a
-      // disc centred on this box's right edge, so the box *is* the visible
-      // half and nothing off the page is ever rasterised.
-      className={cn("relative aspect-[1/2]", className)}
+      /*
+        Half as wide as it is tall: the scene draws the left half of a disc
+        centred on this box's right edge, so the box *is* the visible half and
+        nothing off the page is ever rasterised.
+
+        Square when the whole disc is wanted, which is the shape that wastes
+        the fewest pixels on the other reading of the same scene.
+      */
+      className={cn("relative", full ? "aspect-square" : "aspect-[1/2]", className)}
     >
-      {show ? <MoonScene phase={moon.phase} drift={!pointerFine} /> : null}
+      {show ? (
+        <MoonScene phase={moon.phase} drift={!pointerFine} full={full} />
+      ) : null}
     </div>
   );
 }

@@ -21,7 +21,7 @@ export function Experience() {
       <div className="shell">
         <header className="flex flex-col gap-4">
           <p className="label-mono">
-            <span className="text-signal">04</span> / experience /{" "}
+            <span className="text-signal">03</span> / experience /{" "}
             {formatRange(
               experience[experience.length - 1].start,
               experience[0].end,

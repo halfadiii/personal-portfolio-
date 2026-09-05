@@ -22,7 +22,7 @@ export function Contact() {
     >
       <div className="shell">
         <SectionLabel
-          index="07"
+          index="06"
           label="contact"
           meta="new york city / eastern"
         />

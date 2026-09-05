@@ -15,7 +15,7 @@ export function Capabilities() {
       <div className="shell">
         <SectionHeading
           id="capabilities"
-          index="05"
+          index="04"
           label="capabilities"
           meta={`${skills.reduce((n, group) => n + group.items.length, 0)} entries`}
           title="What the work is built with."

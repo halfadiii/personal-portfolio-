@@ -3,7 +3,7 @@ import { profile } from "@/content";
 import { SectionHeading } from "@/components/site/SectionHeading";
 import { offClock } from "@/content/offclock";
 import { cn } from "@/lib/utils";
-import { Bento } from "./Bento";
+import { CardDeck } from "./CardDeck";
 import { SkyBody } from "./SkyBody";
 import { LiveClockCard } from "./LiveClockCard";
 import { OnRepeatCard } from "./OnRepeatCard";
@@ -39,7 +39,12 @@ import { OnRepeatCard } from "./OnRepeatCard";
  */
 const PLACE: Record<string, { area: string; sizes: string }> = {
   watching: {
-    area: "aspect-[4/5] sm:col-span-2 sm:row-start-2 lg:col-span-4 lg:col-start-1 lg:row-span-2 lg:row-start-1 lg:aspect-auto",
+    // `order-first` only below `lg`, where the single column takes its order
+    // from the source. It has to lead the deck because it is the tallest card
+    // in it — see CardDeck for why the front one being tallest is what keeps
+    // the pile square. Every card is placed explicitly from `sm` up, so this
+    // changes nothing about either grid.
+    area: "aspect-[4/5] max-lg:order-first sm:col-span-2 sm:row-start-2 lg:col-span-4 lg:col-start-1 lg:row-span-2 lg:row-start-1 lg:aspect-auto",
     sizes: "(min-width: 1024px) 25vw, 100vw",
   },
   playing: {
@@ -82,7 +87,7 @@ export function OffClock() {
       <div className="shell">
         <SectionHeading
           id="off-clock"
-          index="06"
+          index="05"
           label="off the clock"
           meta={profile.location.toLowerCase()}
           title="A little more about me."
@@ -101,9 +106,40 @@ export function OffClock() {
             hangs on the right edge of the window with half of it over the
             side, which is why the grid is padded away from that edge rather
             than sharing a row with it. */}
-        <div className="mt-10 lg:pr-[19rem] xl:pr-[24rem]">
-          <Bento className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
-            <LiveClockCard className="sm:col-span-2 sm:row-start-1 lg:col-span-8 lg:col-start-5 lg:row-start-1" />
+        <div className="relative mt-10 lg:pr-[19rem] xl:pr-[24rem]">
+          {/* On a phone the moon is the background rather than a neighbour:
+              the whole disc, behind the cards, held in the middle of the
+              screen while the section goes past. Sticky rather than centred in
+              the section, because the section is two and a half screens tall
+              and a moon centred in it would be off the top for most of them.
+
+              Bright, because nothing reads over it. The two cards without a
+              picture in them were left see-through at first so the disc would
+              show through the time — which measured at 4.49:1 for the steel
+              type on it, a fail, and one nobody would have caught by eye.
+              Scrimming them until it passed left the moon barely visible
+              through them anyway, so they are simply opaque now and the moon
+              is turned up instead. It is seen where it can actually be seen:
+              around the pile as the section arrives, which is the moment this
+              was built for, and between the cards after. */}
+          <div className="pointer-events-none absolute inset-0 z-0 lg:hidden">
+            <div className="sticky top-0 flex h-[100svh] items-center justify-center">
+              <SkyBody full className="w-[min(96vw,24rem)] opacity-70" />
+            </div>
+          </div>
+
+          <CardDeck
+            className="relative z-10"
+            /* Wider gaps below `lg`: the gaps are where the moon shows once the
+               cards have come apart, so they are doing a job there that they
+               are not doing on a desktop grid. */
+            gridClassName="grid grid-cols-1 gap-3 max-lg:gap-5 sm:grid-cols-2 lg:grid-cols-12"
+          >
+            {/* The two cards without a picture in them are transparent, which was
+                fine over a black section and is not over a moon. A scrim below
+                `lg` keeps their type legible and still lets the disc read
+                through — which is the whole point of it being back there. */}
+            <LiveClockCard className="max-lg:bg-void sm:col-span-2 sm:row-start-1 lg:col-span-8 lg:col-start-5 lg:row-start-1" />
 
             {offClock.map((card) => (
               <article
@@ -145,12 +181,8 @@ export function OffClock() {
               </article>
             ))}
 
-            <OnRepeatCard className="sm:col-span-2 sm:row-start-5 lg:col-span-6 lg:col-start-7 lg:row-start-3" />
-          </Bento>
-
-          {/* Below `lg` it sits under the grid, bled out to the edge of the
-              window so the same half of it is over the side. */}
-          <SkyBody className="mt-10 mr-[calc(var(--shell-pad)*-1)] ml-auto w-[11rem] sm:w-[14rem] lg:hidden" />
+            <OnRepeatCard className="max-lg:bg-void sm:col-span-2 sm:row-start-5 lg:col-span-6 lg:col-start-7 lg:row-start-3" />
+          </CardDeck>
         </div>
       </div>
 

@@ -26,10 +26,9 @@ export const nav = [
 
 export const sections = [
   { id: "hero", index: "01", label: "index" },
-  { id: "metrics", index: "02", label: "measured outcomes" },
-  { id: "work", index: "03", label: "selected work" },
-  { id: "experience", index: "04", label: "experience" },
-  { id: "capabilities", index: "05", label: "capabilities" },
-  { id: "off-clock", index: "06", label: "off the clock" },
-  { id: "contact", index: "07", label: "contact" },
+  { id: "work", index: "02", label: "selected work" },
+  { id: "experience", index: "03", label: "experience" },
+  { id: "capabilities", index: "04", label: "capabilities" },
+  { id: "off-clock", index: "05", label: "off the clock" },
+  { id: "contact", index: "06", label: "contact" },
 ] as const;

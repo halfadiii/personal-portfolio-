@@ -3,6 +3,7 @@
 import { Canvas } from "@react-three/fiber";
 import { Cadence } from "./Cadence";
 import { Nebula, Starfield } from "./Galaxy";
+import { ShootingStars } from "./ShootingStars";
 
 /**
  * The sky, behind everything.
@@ -18,7 +19,7 @@ import { Nebula, Starfield } from "./Galaxy";
  * pass the window at the rate the type does, and parallaxing them would be a
  * hundred metres of movement to say the same thing.
  *
- * It costs one nebula sample and one point cloud a frame, capped at 60 and
+ * It costs one nebula sample, one point cloud and seven quads a frame, capped at 60 and
  * stopped when the tab is hidden. The nebula is a cube map baked once at
  * mount, so the expensive part happens once — see `Galaxy.tsx`.
  */
@@ -47,6 +48,7 @@ export default function GalaxyBackdrop() {
         <Cadence />
         <Nebula intensity={1.15} />
         <Starfield count={3000} radius={40} seed={20260903} />
+        <ShootingStars />
       </Canvas>
     </div>
   );

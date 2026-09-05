@@ -46,17 +46,24 @@ const SWAY = { x: 0.11, y: 0.084, z: 0.044 };
  */
 const HIT = 0.95;
 
+/*
+ * How much bigger it gets under the pointer.
+ *
+ * The brightness lift that used to come with this was doing most of the work —
+ * more than doubling the lit area — which reads as a lamp being turned up
+ * rather than as a star coming nearer. It is nearly all size now, and size is
+ * what was asked for.
+ */
+const SWELL = 0.14;
+
 export function Sun({
   positionRef,
   pointerRef,
-  onSelect,
 }: {
   /** Written every frame in world space, for everything the light touches. */
   positionRef: React.RefObject<THREE.Vector3>;
   /** -1..1 across the canvas. The star leans with it, and so do the shadows. */
   pointerRef: React.RefObject<THREE.Vector2>;
-  /** Clicking the star itself, which is a different thing from clicking a planet. */
-  onSelect?: () => void;
 }) {
   const group = useRef<THREE.Group>(null);
   const billboard = useRef<THREE.Mesh>(null);
@@ -87,6 +94,20 @@ export function Sun({
       // flicker rather than as a response.
       const want = hovered.current ? 1 : 0;
       u.uHover.value += (want - u.uHover.value) * (1 - Math.exp(-7 * delta));
+
+      /*
+       * And it swells.
+       *
+       * The quad is scaled rather than the star being grown inside the shader,
+       * because the shader sizes the body in world units against a planet
+       * radius — growing it there would change what the star *is* rather than
+       * how near it looks. Scaling the billboard takes the whole thing
+       * together, corona and falloff included, which reads as a star leaning
+       * out of the screen rather than as a light being turned up.
+       */
+      if (billboard.current) {
+        billboard.current.scale.setScalar(1 + u.uHover.value * SWELL);
+      }
     }
 
     if (group.current) {
@@ -128,35 +149,31 @@ export function Sun({
       </mesh>
 
       {/*
-        The target. A sphere rather than a disc because a sphere does not care
-        which way the camera is, so unlike everything else here it needs no
-        billboarding to stay the same size to aim at.
+        What the pointer finds. A sphere rather than a disc because a sphere
+        does not care which way the camera is, so unlike everything else here it
+        needs no billboarding to stay the same size to aim at.
 
         It draws nothing: colour writing is off, so it cannot tint the bloom it
         sits inside, and depth writing is off, so it cannot occlude it either.
         It still raycasts, because three tests visibility and not whether a
         material would leave a mark.
+
+        No cursor change and nothing to click. The star is not a control — it
+        answers the pointer because something that large and that bright ought
+        to notice one, and that is the whole of it.
       */}
-      {onSelect ? (
-        <mesh
-          onPointerOver={(event) => {
-            event.stopPropagation();
-            hovered.current = true;
-            document.body.style.cursor = "pointer";
-          }}
-          onPointerOut={() => {
-            hovered.current = false;
-            document.body.style.removeProperty("cursor");
-          }}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelect();
-          }}
-        >
-          <sphereGeometry args={[HIT, 16, 12]} />
-          <meshBasicMaterial colorWrite={false} depthWrite={false} />
-        </mesh>
-      ) : null}
+      <mesh
+        onPointerOver={(event) => {
+          event.stopPropagation();
+          hovered.current = true;
+        }}
+        onPointerOut={() => {
+          hovered.current = false;
+        }}
+      >
+        <sphereGeometry args={[HIT, 16, 12]} />
+        <meshBasicMaterial colorWrite={false} depthWrite={false} />
+      </mesh>
     </group>
   );
 }
@@ -209,7 +226,7 @@ const CORONA_FRAG = /* glsl */ `
     // Hovered, the star swells rather than lights up: the body and the far
     // bloom gain, the throat does not. Brightening the core instead would just
     // clip — it is already at one — and nothing would appear to happen.
-    float glow = (core * 0.9 + body * (1.0 + uHover * 0.42) + bloom * (1.0 + uHover * 1.1)) * breath;
+    float glow = (core * 0.9 + body * (1.0 + uHover * 0.10) + bloom * (1.0 + uHover * 0.22)) * breath;
 
     // Nothing may survive to the edge of the quad, or the quad becomes a disc.
     glow *= 1.0 - smoothstep(0.62, 1.0, d);

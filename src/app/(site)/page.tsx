@@ -7,7 +7,6 @@ import { Capabilities } from "@/components/sections/Capabilities";
 import { Contact } from "@/components/sections/Contact";
 import { Experience } from "@/components/sections/Experience";
 import { Hero } from "@/components/sections/Hero";
-import { MetricStrip } from "@/components/sections/MetricStrip";
 import { OffClock } from "@/components/sections/OffClock";
 import { ScrollTrail } from "@/components/sections/ScrollTrail";
 import { SelectedWork } from "@/components/sections/SelectedWork";
@@ -24,7 +23,6 @@ export default async function HomePage() {
       <HomeMotion />
 
       <Hero caseStudies={caseStudies} />
-      <MetricStrip />
       <SelectedWork caseStudies={caseStudies} />
       <ScrollTrail chapters={trailChapters} label="How I approach a problem" />
       <Experience />

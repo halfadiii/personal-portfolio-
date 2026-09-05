@@ -390,14 +390,18 @@ function Moon({
 }
 
 /**
- * Sets the frame, and puts the body's centre on its right-hand edge.
+ * Sets the frame, and decides how much of the body is in it.
  *
- * The canvas is half as wide as it is tall and the sphere is centred on the
- * edge of it, so exactly half a disc is drawn and the other half is never
- * rasterised at all. Hiding it with CSS instead would have the renderer fill
- * every one of those pixels and then throw them away.
+ * Beside the section the canvas is half as wide as it is tall and the sphere
+ * is centred on the edge of it, so exactly half a disc is drawn and the other
+ * half is never rasterised at all. Hiding it with CSS instead would have the
+ * renderer fill every one of those pixels and then throw them away.
+ *
+ * Behind the section — which is what a phone gets — the whole disc is wanted,
+ * so the camera sits on the axis instead and the box is square. Same scene,
+ * same cost per pixel; only where the camera stands changes.
  */
-function Frame({ halfHeight }: { halfHeight: number }) {
+function Frame({ halfHeight, centred }: { halfHeight: number; centred: boolean }) {
   const camera = useThree((state) => state.camera);
   const size = useThree((state) => state.size);
 
@@ -408,9 +412,9 @@ function Frame({ halfHeight }: { halfHeight: number }) {
     ortho.right = halfWidth;
     ortho.top = halfHeight;
     ortho.bottom = -halfHeight;
-    ortho.position.set(-halfWidth, 0, 4);
+    ortho.position.set(centred ? 0 : -halfWidth, 0, 4);
     ortho.updateProjectionMatrix();
-  }, [camera, size, halfHeight]);
+  }, [camera, size, halfHeight, centred]);
 
   return null;
 }
@@ -418,11 +422,14 @@ function Frame({ halfHeight }: { halfHeight: number }) {
 export default function MoonScene({
   phase,
   drift = false,
+  full = false,
 }: {
   /** 0 at new, 0.5 at full. */
   phase: number;
   /** True where there is no pointer to follow, so it moves on its own. */
   drift?: boolean;
+  /** Draw the whole disc, centred, rather than the left half of one. */
+  full?: boolean;
 }) {
   const pointer = useRef({ x: 0, y: 0 });
 
@@ -451,7 +458,7 @@ export default function MoonScene({
       onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
     >
       <Cadence />
-      <Frame halfHeight={1.12} />
+      <Frame halfHeight={1.12} centred={full} />
       <Moon phase={phase} pointer={pointer} drift={drift} />
     </Canvas>
   );

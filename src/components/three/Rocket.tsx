@@ -55,16 +55,46 @@ const WEAVE_VERTICAL = 0.24;
  * rather than sinking into it.
  */
 const PARK_HEIGHT = 0.44;
-/** Everything horizontal is done by this point; the rest is a vertical drop. */
-const LATERAL_DONE = 0.68;
-/**
- * Where the craft starts shedding altitude. Well before `LATERAL_DONE`, so it
- * is already most of the way down when the sideways travel stops: the final
- * vertical drop is a quarter of the cruise height, not the whole of it. A
- * craft that arrives over the pad still at cruise altitude and then falls the
- * entire way looks like an elevator, not a landing.
+/** Where the coast hands over to the landing burn. */
+const TOUCH_FROM = 0.62;
+/** Length of that burn, as a fraction of the transfer. */
+const BURN = 1 - TOUCH_FROM;
+/*
+ * The sweep is spread over rather more of the flight than the coast uses.
+ *
+ * It only matters that the ease is still climbing where the coast stops, so
+ * the burn is handed a craft that is genuinely still moving sideways and has
+ * to deal with it. That is the whole scenario.
  */
-const DESCENT_FROM = 0.26;
+const SWEEP_SPAN = 0.86;
+/** How much of the cruise height the coast gives back before the burn. */
+const SETTLE = 0.3;
+/*
+ * How much of the burn is spent killing the sideways motion.
+ *
+ * Cross-range first, then straight down — which is both what a real descent
+ * does and what the version before this was reaching for. The difference is
+ * that the horizontal profile here reaches its end with zero velocity *and*
+ * zero acceleration, so stopping it is free. The old one stopped a bulge that
+ * was still moving at nearly three units a second, and that is the corner.
+ */
+const LAT_END = 0.7;
+/** Gravity, world units per second squared. Sets how far it leans on the burn. */
+const GRAVITY = 3.0;
+/*
+ * Where it turns round, and how fast it is allowed to.
+ *
+ * A booster flips over the top of its arc, not on the way down: by the time
+ * the engine lights it is already pointing back along its own track. The rate
+ * cap is the part that matters — a first-order chase is proportional, not
+ * bounded, so handed a 173-degree step it starts at about two thousand degrees
+ * a second, which reads as a glitch rather than as a manoeuvre.
+ */
+const FLIP_FROM = 0.42;
+const MAX_TURN = (300 * Math.PI) / 180;
+/** How hard the attitude chases its target, per second. */
+const CHASE = 12;
+
 
 /**
  * The arrival from the loading screen.
@@ -264,6 +294,11 @@ export function Rocket({
     /** Phase and sign of the weave, fixed per destination. */
     phase: 0,
     lean: 1,
+    /** The burn's initial conditions, read off the coast when a leg begins. */
+    hold: new THREE.Vector3(),
+    holdVel: new THREE.Vector3(),
+    holdAcc: new THREE.Vector3(),
+    pad: new THREE.Vector3(),
   });
 
   /** The descent out of the loading screen. `wanted` is read on the first
@@ -317,39 +352,39 @@ export function Rocket({
     };
   }, [radius, step]);
 
-  /** Where the craft is at `t` along the current transfer. */
-  const at = useMemo(() => {
+  /**
+   * The crossing, before the engine relights. Lift, arch, weave, drift down.
+   *
+   * Nothing in here is clamped. The old version ran its arch as
+   * `sin(pi * min(1, c / 0.68))` so it could stop the sideways travel dead at
+   * that point, and the slope of that at the clamp is -pi/0.68 rather than
+   * zero — radial speed went from about -2.9 units per unit t to exactly 0
+   * between one frame and the next. That is the corner. This is only ever
+   * evaluated below `TOUCH_FROM`, which is inside `SWEEP_SPAN`, so there is no
+   * clamp here for one to hide in.
+   */
+  const coastAt = useMemo(() => {
     return (t: number, into: THREE.Vector3) => {
       const state = flight.current;
       const c = Math.min(1, Math.max(0, t));
 
-      // Everything horizontal happens in the first stretch and is complete
-      // before the descent starts: the angle round the ring finishes here...
-      const angle =
-        state.fromAngle + state.sweep * smoothstep(0, LATERAL_DONE, c);
-
-      // ...and so does the outward bulge, which is what used to leave it half
-      // a unit outside the orbit at the top of the descent and bring it in
-      // sideways. One arch over the crossing only, zero at both of its ends.
-      const cross = Math.sin(
-        Math.PI * Math.min(1, Math.max(0, c / LATERAL_DONE)),
-      );
-      const weave = cross * state.lean;
+      const angle = state.fromAngle + state.sweep * smoothstep(0, SWEEP_SPAN, c);
+      const arch = Math.sin(Math.PI * (c / SWEEP_SPAN));
+      const weave = arch * state.lean;
 
       const r =
         radius +
-        BULGE * cross +
+        BULGE * arch +
         WEAVE_RADIAL * weave * Math.sin(c * Math.PI * 2.7 + state.phase);
 
-      // Height is the only thing still moving at the end. Up quickly, hold,
-      // then settle — and `smoothstep` is flat at both ends, so the descent
-      // begins from a hover and arrives at zero vertical speed, which is the
-      // whole difference between landing and hitting the ground.
-      const rise = smoothstep(0, 0.22, c);
-      const drop = smoothstep(DESCENT_FROM, 1.0, c);
+      // Climbs off the pad and then gives a little of it back on the way over,
+      // so the burn is handed a craft already descending rather than one
+      // hanging at cruise height.
+      const hold =
+        smoothstep(0, 0.22, c) * (1 - SETTLE * smoothstep(0.34, 1.0, c));
       const y =
         PARK_HEIGHT +
-        CLIMB * rise * (1 - drop) +
+        CLIMB * hold +
         WEAVE_VERTICAL *
           weave *
           Math.sin(c * Math.PI * 1.9 + state.phase * 1.7 + 1.1);
@@ -357,6 +392,64 @@ export function Rocket({
       return into.set(Math.sin(angle) * r, y, Math.cos(angle) * r);
     };
   }, [radius]);
+
+  /**
+   * Read off the coast where the burn takes over: where, how fast, and turning
+   * how hard. These three are the burn's initial conditions, and handing them
+   * over is what makes the join smooth rather than something to be tuned.
+   */
+  const solveBurn = useMemo(() => {
+    return () => {
+      const state = flight.current;
+      const e = 1e-3;
+      coastAt(TOUCH_FROM, scratch.here);
+      coastAt(TOUCH_FROM + e, scratch.ahead);
+      coastAt(TOUCH_FROM - e, scratch.behind);
+
+      state.hold.copy(scratch.here);
+      state.holdVel
+        .subVectors(scratch.ahead, scratch.behind)
+        .multiplyScalar(1 / (2 * e));
+      state.holdAcc
+        .copy(scratch.ahead)
+        .add(scratch.behind)
+        .addScaledVector(scratch.here, -2)
+        .multiplyScalar(1 / (e * e));
+
+      const to = state.fromAngle + state.sweep;
+      state.pad.set(Math.sin(to) * radius, PARK_HEIGHT, Math.cos(to) * radius);
+    };
+  }, [coastAt, radius, scratch]);
+
+  /** Where the craft is at `t` along the current transfer. */
+  const at = useMemo(() => {
+    return (t: number, into: THREE.Vector3) => {
+      const c = Math.min(1, Math.max(0, t));
+      if (c <= TOUCH_FROM) return coastAt(c, into);
+
+      const st = flight.current;
+      const s = (c - TOUCH_FROM) / BURN;
+      return into.set(
+        burnAxis(s, LAT_END, st.hold.x, st.holdVel.x, st.holdAcc.x, st.pad.x).p,
+        burnAxis(s, 1, st.hold.y, st.holdVel.y, st.holdAcc.y, st.pad.y).p,
+        burnAxis(s, LAT_END, st.hold.z, st.holdVel.z, st.holdAcc.z, st.pad.z).p,
+      );
+    };
+  }, [coastAt]);
+
+  /** What the engine is doing at `t`, in world units per second squared. */
+  const burnAccelAt = useMemo(() => {
+    return (t: number, into: THREE.Vector3) => {
+      const st = flight.current;
+      const s = (Math.min(1, Math.max(TOUCH_FROM, t)) - TOUCH_FROM) / BURN;
+      const k = 1 / (TRANSFER * TRANSFER);
+      return into.set(
+        burnAxis(s, LAT_END, st.hold.x, st.holdVel.x, st.holdAcc.x, st.pad.x).a * k,
+        burnAxis(s, 1, st.hold.y, st.holdVel.y, st.holdAcc.y, st.pad.y).a * k,
+        burnAxis(s, LAT_END, st.hold.z, st.holdVel.z, st.holdAcc.z, st.pad.z).a * k,
+      );
+    };
+  }, []);
 
   const path = useMemo(() => makeTrail(TRAIL), []);
   const exhaust = useMemo(() => makeSparks(SPARKS), []);
@@ -382,6 +475,7 @@ export function Rocket({
       state.fromAngle = wanted * step;
       state.sweep = 0;
       state.t = 1;
+      solveBurn();
       // Unless the loading screen is still up, in which case this craft has
       // not landed yet — it is the one that just left the pad up there.
       arrival_.wanted = document.documentElement.dataset.preloader === "on";
@@ -403,6 +497,7 @@ export function Rocket({
       state.lean = wanted % 2 === 0 ? 1 : -1;
       state.target = wanted;
       state.t = 0;
+      solveBurn();
     }
 
     if (arriving) {
@@ -438,32 +533,57 @@ export function Rocket({
       if (scratch.forward.lengthSq() < 1e-9) scratch.forward.copy(scratch.up);
       scratch.forward.normalize();
     } else if (flying) {
-      // Along the path it is actually flying...
-      at(Math.min(1, state.t + 0.02), scratch.ahead);
-      at(Math.max(0, state.t - 0.02), scratch.behind);
-      scratch.forward.subVectors(scratch.ahead, scratch.behind);
-      if (scratch.forward.lengthSq() < 1e-9) scratch.forward.copy(scratch.up);
-      else scratch.forward.normalize();
-
-      // ...except at the two ends. It leaves the pad vertically and returns to
-      // vertical for the descent, because velocity on final approach points
-      // straight down and flying that attitude means landing on the nose.
-      const upright = Math.max(
-        1 - smoothstep(0, 0.15, state.t),
-        // Fully vertical by the time the descent starts, so the whole drop is
-        // flown tail-down rather than rotating on the way in.
-        smoothstep(LATERAL_DONE - 0.18, LATERAL_DONE, state.t),
-      );
-      scratch.forward.lerp(scratch.up, upright);
-      if (scratch.forward.lengthSq() < 1e-9) scratch.forward.copy(scratch.up);
-      scratch.forward.normalize();
+      /*
+       * Nose-first across, engine-first down.
+       *
+       * The attitude is not a shape any more, it is where the thrust has to
+       * point. On the crossing there is no thrust, so it flies along its own
+       * velocity. Over the top of the arc it turns round — before the engine
+       * lights, which is the order a booster does it in. From there it points
+       * along thrust: retrograde and tilted back while the sideways speed is
+       * being killed, and exactly vertical once that is gone, because the
+       * horizontal part of the burn has finished and the only acceleration
+       * left is the one holding it up.
+       */
+      if (state.t >= FLIP_FROM) {
+        // Before the burn the target is the attitude the burn will want, so
+        // the turn is finished by the time it is needed.
+        burnAccelAt(Math.max(state.t, TOUCH_FROM), scratch.forward);
+        scratch.forward.y += GRAVITY;
+        if (scratch.forward.lengthSq() < 1e-9) scratch.forward.copy(scratch.up);
+        scratch.forward.normalize();
+      } else {
+        at(Math.min(1, state.t + 0.02), scratch.ahead);
+        at(Math.max(0, state.t - 0.02), scratch.behind);
+        scratch.forward.subVectors(scratch.ahead, scratch.behind);
+        if (scratch.forward.lengthSq() < 1e-9) scratch.forward.copy(scratch.up);
+        else scratch.forward.normalize();
+        // It still leaves the pad standing up: velocity off the pad is
+        // vertical anyway, but the first frames of it are noisy.
+        scratch.forward.lerp(scratch.up, 1 - smoothstep(0, 0.15, state.t));
+        if (scratch.forward.lengthSq() < 1e-9) scratch.forward.copy(scratch.up);
+        scratch.forward.normalize();
+      }
     } else {
       // Parked: standing on its tail.
       scratch.forward.copy(scratch.up);
     }
 
     scratch.aim.setFromUnitVectors(scratch.up, scratch.forward);
-    node.quaternion.slerp(scratch.aim, 1 - Math.exp(-9 * delta));
+    /*
+     * Chased, but never faster than the vehicle could turn.
+     *
+     * The chase on its own is proportional: the further it has to go the
+     * faster it starts, and the turn onto the burn is most of a half turn. Cap
+     * it and the flip becomes a manoeuvre with a duration instead of a jump —
+     * measured at 300 degrees a second, which is where the cap is.
+     */
+    const off = 2 * Math.acos(Math.min(1, Math.abs(node.quaternion.dot(scratch.aim))));
+    const chase = 1 - Math.exp(-CHASE * delta);
+    node.quaternion.slerp(
+      scratch.aim,
+      off > 1e-6 ? Math.min(chase, (MAX_TURN * delta) / off) : 1,
+    );
 
     // Hard off the pad, nothing through the coast, then a retro burn that
     // holds the descent back and cuts at touchdown.
@@ -479,9 +599,11 @@ export function Rocket({
       : flying
         ? 0.05 +
           Math.exp(-state.t * 6.5) * 0.95 +
-          smoothstep(LATERAL_DONE - 0.1, LATERAL_DONE + 0.08, state.t) *
-            (1 - smoothstep(0.96, 1.0, state.t)) *
-            0.85
+          // Lights at the handoff and throttles down as the last of the speed
+          // comes off, which is when it needs the least of it.
+          smoothstep(TOUCH_FROM - 0.04, TOUCH_FROM + 0.04, state.t) *
+            (1 - smoothstep(0.9, 1.0, state.t)) *
+            0.95
         : 0.05;
 
     if (hullMaterial.current) {
@@ -545,6 +667,56 @@ export function Rocket({
 }
 
 /** Hermite ramp between two edges, flat at both ends. */
+/**
+ * One axis of the landing burn: where it is, and what the engine is doing.
+ *
+ * A quintic Hermite, matched at both ends on position, velocity *and*
+ * acceleration. The two extra conditions are not decoration. At the top they
+ * let the burn inherit the coast's own curvature, so the join has no jerk in
+ * it; at the bottom they force the acceleration to zero, which means thrust
+ * there is doing nothing but holding the craft's weight — and since the craft
+ * points along its thrust, that is what lets it touch down standing straight
+ * rather than leaning.
+ *
+ * `end` is where this axis finishes. The horizontal ones stop early, at
+ * `LAT_END`, and holding them after that costs nothing precisely because both
+ * of their derivatives are already zero there. That is the whole fix: the old
+ * path stopped its sideways travel with a clamp while it was still moving.
+ */
+function burnAxis(
+  s: number,
+  end: number,
+  p0: number,
+  v0: number,
+  a0: number,
+  p1: number,
+) {
+  const u = Math.min(1, s / end);
+  const d = BURN * end;
+  const u2 = u * u;
+  const u3 = u2 * u;
+  const u4 = u3 * u;
+  const u5 = u4 * u;
+
+  const m0 = v0 * d;
+  const c0 = a0 * d * d;
+
+  const h0 = 1 - 10 * u3 + 15 * u4 - 6 * u5;
+  const h1 = u - 6 * u3 + 8 * u4 - 3 * u5;
+  const h2 = 0.5 * u2 - 1.5 * u3 + 1.5 * u4 - 0.5 * u5;
+  const h3 = 10 * u3 - 15 * u4 + 6 * u5;
+
+  const p = h0 * p0 + h1 * m0 + h2 * c0 + h3 * p1;
+
+  if (s >= end) return { p, a: 0 };
+
+  const d0 = -60 * u + 180 * u2 - 120 * u3;
+  const d1 = -36 * u + 96 * u2 - 60 * u3;
+  const d2 = 1 - 9 * u + 18 * u2 - 10 * u3;
+  const d3 = 60 * u - 180 * u2 + 120 * u3;
+  return { p, a: (d0 * p0 + d1 * m0 + d2 * c0 + d3 * p1) / (d * d) };
+}
+
 function smoothstep(edge0: number, edge1: number, x: number) {
   const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);
