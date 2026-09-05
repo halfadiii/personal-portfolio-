@@ -423,6 +423,7 @@ export default function MoonScene({
   phase,
   drift = false,
   full = false,
+  running = true,
 }: {
   /** 0 at new, 0.5 at full. */
   phase: number;
@@ -430,6 +431,15 @@ export default function MoonScene({
   drift?: boolean;
   /** Draw the whole disc, centred, rather than the left half of one. */
   full?: boolean;
+  /**
+   * An extra gate, for a caller that knows when this is finished.
+   *
+   * Cadence stops a canvas that has scrolled out of view, which is enough
+   * wherever this sits in the page and scrolls with it. The relay's copy does
+   * not: it is a fixed layer and therefore always on screen by construction, so
+   * it has to be told.
+   */
+  running?: boolean;
 }) {
   const pointer = useRef({ x: 0, y: 0 });
 
@@ -457,7 +467,7 @@ export default function MoonScene({
       camera={{ position: [0, 0, 4], near: 0.1, far: 20 }}
       onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
     >
-      <Cadence />
+      <Cadence running={running} />
       <Frame halfHeight={1.12} centred={full} />
       <Moon phase={phase} pointer={pointer} drift={drift} />
     </Canvas>

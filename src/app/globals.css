@@ -589,24 +589,40 @@
   color: var(--signal);
 }
 
-/* The section below the trail, for as long as the globe is still behind it.
+/* The page, for as long as there is a lit body behind it.
 
    The scene used to stop dead at the trail's bottom edge, which put a straight
-   horizontal cut through the planet. It carries on now and dims over the next
-   screen, so for that screen this section's type has a lit Earth behind it and
-   needs the same halo the chapter copy gets. Set and unset from ScrollTrail on
-   the next sibling, so nothing here has to know which section that is. */
-[data-scene-spill] :is(h2, h3, p, span, summary, li) {
+   horizontal cut through the planet. It carries on now — and with the handover
+   the moon crosses experience and capabilities on its way to about — so for
+   those screens the type has a lit body behind it and needs the same halo the
+   chapter copy gets. Set and unset from ScrollTrail on the body, because it is
+   the destination that decides how far the sky reaches, not this file. */
+/* A moon that is about to be handed one. Hidden rather than faded: it is not
+   a transition, it is the same disc arriving from somewhere else, and what
+   would cross-fade here is one moon with another moon. */
+[data-relay-hold] {
+  visibility: hidden;
+}
+
+[data-scene-spill]
+  :is(h1, h2, h3, h4, p, span, li, dt, dd, summary, a, time, strong, em) {
   /* Tighter than the chapter halo, and opaque, because this section's body copy
      is steel rather than white. A single 4px shadow is too soft to darken the
      middle of a thin stem — the blur spreads its alpha before it gets there —
      and steel over what was left came out at 3.4:1. The 1px and 3px passes put
      solid black under the strokes themselves; the wide ones stop the letters
-     sitting in a bright halo of their own making. */
+     sitting in a bright halo of their own making.
+
+     The element list is long because it is a list of what is actually on the
+     page, not of what seemed likely. `dt` and `dd` were missing from the first
+     version of it, and the capabilities headings — which the moon crosses at
+     its brightest — measured 1.05:1: white type on a white moon, with nothing
+     between them. */
   text-shadow:
     0 0 1px rgba(0, 0, 0, 1),
-    0 0 3px rgba(0, 0, 0, 1),
-    0 0 8px rgba(0, 0, 0, 0.92),
+    0 0 2px rgba(0, 0, 0, 1),
+    0 0 4px rgba(0, 0, 0, 1),
+    0 0 9px rgba(0, 0, 0, 0.92),
     0 1px 14px rgba(0, 0, 0, 0.8);
 }
 

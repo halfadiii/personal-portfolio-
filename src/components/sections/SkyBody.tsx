@@ -74,6 +74,11 @@ export function SkyBody({
   return (
     <div
       ref={ref}
+      /* The relay that carries the globe across to this section finds its
+         destination by this, and lands on the disc drawn inside. Both usages
+         carry it; exactly one of them is ever displayed, and the relay picks
+         whichever currently has a box. */
+      data-sky-moon
       role={show ? "img" : undefined}
       aria-label={show ? label : undefined}
       /*

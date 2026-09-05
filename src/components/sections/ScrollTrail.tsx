@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useCapability } from "@/components/motion/capability";
+import { earthDisc } from "@/components/three/earth-frame";
+import { moonPhase } from "@/lib/sky";
 import { cn } from "@/lib/utils";
+import { EMERGE, placeSky, type Disc } from "./sky-relay";
 
 /**
  * The pinned scroll narrative.
@@ -22,6 +25,29 @@ import { cn } from "@/lib/utils";
 const EarthScene = dynamic(() => import("@/components/three/EarthScene"), {
   ssr: false,
 });
+
+const MoonScene = dynamic(() => import("@/components/three/MoonScene"), {
+  ssr: false,
+});
+
+/**
+ * The disc a moon box is actually drawing, from the box itself.
+ *
+ * `MoonScene` frames a unit sphere in an orthographic half-height of 1.12, so
+ * whatever the box, the disc is 1/1.12 of it — and where the box is twice as
+ * tall as it is wide, the scene stands the camera off to one side and draws
+ * only the left half, which puts the centre on the box's right edge. Both
+ * shapes are read here rather than assumed, because the about section uses one
+ * on a phone and the other on a laptop.
+ */
+function discOf(box: DOMRect): Disc {
+  const half = box.width < box.height * 0.75;
+  return {
+    x: half ? box.right : box.left + box.width / 2,
+    y: box.top + box.height / 2,
+    d: box.height / 1.12,
+  };
+}
 
 /**
  * What a scene behind the trail has to accept. Scroll position and the pointer
@@ -49,6 +75,7 @@ export function ScrollTrail({
   chapters,
   label,
   scene: Scene = EarthScene,
+  handoff,
 }: {
   /** Not baked in: the shell is the mechanism, not the section. */
   id?: string;
@@ -56,6 +83,14 @@ export function ScrollTrail({
   label: string;
   /** The canvas behind the copy. */
   scene?: TrailSceneComponent;
+  /**
+   * A selector for a moon this scene should hand over to further down the page.
+   * Given one, the sky does not simply fade out at the end of the trail: a moon
+   * comes out from behind the globe, takes the frame, and travels to that
+   * element's disc, where the real one takes over. Left out, the section
+   * behaves as it always did.
+   */
+  handoff?: string;
 }) {
   const section = useRef<HTMLElement>(null);
   const progressRef = useRef(0);
@@ -63,6 +98,10 @@ export function ScrollTrail({
   // the left half of it, and the strand should still answer the cursor there.
   const pointerRef = useRef({ x: 0, y: 0, on: 0 });
   const sceneBox = useRef<HTMLDivElement>(null);
+  const moonBox = useRef<HTMLDivElement>(null);
+  /** The moon being held back, and whether it currently is. */
+  const held = useRef<Element | null>(null);
+  const heldOn = useRef(false);
   const railRef = useRef<HTMLDivElement>(null);
   /**
    * Whether the scene is worth drawing.
@@ -73,12 +112,19 @@ export function ScrollTrail({
    * rendering behind the footer. Scroll position is the honest source.
    */
   const [sceneLive, setSceneLive] = useState(false);
+  const [moonLive, setMoonLive] = useState(false);
+  /** Either body on screen — which is what the copy below has to survive. */
+  const [skyLive, setSkyLive] = useState(false);
   const [active, setActive] = useState(0);
   const [mounted, setMounted] = useState(false);
   // Latched, never unset: a canvas that has been built is cheap to keep and
   // expensive to rebuild.
   const [near, setNear] = useState(false);
-  const { richMotion, reducedMotion } = useCapability();
+  const { richMotion, reducedMotion, pointerFine } = useCapability();
+  /* The same real phase the about section draws, so the two discs the handover
+     crossfades between are the same moon and not merely both moons. */
+  const [phase, setPhase] = useState(0.5);
+  useEffect(() => setPhase(moonPhase(new Date()).phase), []);
 
   useEffect(() => {
     if (!richMotion) return;
@@ -127,6 +173,16 @@ export function ScrollTrail({
   const measure = useCallback(() => {
     const node = section.current;
     if (!node) return;
+    /*
+     * Whether there is a relay at all.
+     *
+     * Not just "was a handoff given". Reduced motion, a viewport too small for
+     * the scene, a machine that never got the rich-motion flag — in all of them
+     * no canvas is mounted, and the code below would still hold the about
+     * section's own moon back for a relay that is never coming. Which is the
+     * worst outcome available: the section simply has no moon in it.
+     */
+    const relaying = handoff && mounted && reducedMotion === false ? handoff : null;
     const box = node.getBoundingClientRect();
     const travel = box.height - window.innerHeight;
     const value = travel > 0 ? Math.min(1, Math.max(0, -box.top / travel)) : 0;
@@ -137,41 +193,147 @@ export function ScrollTrail({
     }
 
     /*
-     * How solid the globe is, either side of the pinned stretch.
+     * The sky, either side of the pinned stretch.
      *
-     * It used to be clipped to this section, which meant the bottom edge of the
-     * section took a straight razor through the planet on the way out — a
-     * photographic Earth cut off by a horizontal line, which reads as a broken
-     * image rather than a transition. The canvas is viewport-sized and fixed
-     * now, so instead of being cut it dims: still there behind the top of the
-     * section that follows, gone a screen later.
+     * The globe used to be clipped to this section, which meant the bottom edge
+     * took a straight razor through the planet on the way out. It is a fixed
+     * viewport layer now, so instead of being cut it hands over: given a
+     * `handoff`, a moon comes out from behind it, takes the frame while the
+     * globe goes out, and travels to the disc the about section draws.
      *
-     * The two ramps meet the pinned stretch exactly. `top` reaches 0 as
-     * progress starts, and `bottom` passes the fold as progress reaches 1 —
-     * `travel` is the section height less one viewport, so those are the same
-     * instant. No constant to keep in step with the layout.
+     * `enter` is the only ramp still computed here, because it is the only one
+     * tied to this section's own box: `top` reaches 0 exactly as progress
+     * starts, so the globe is solid by the time the first chapter is pinned.
+     * Everything after the pin is `placeSky`, which is pure and checkable.
      */
-    const view = window.innerHeight;
-    const enter = Math.min(1, Math.max(0, (view - box.top) / view));
-    const leave = Math.min(1, Math.max(0, box.bottom / view));
-    const solid = Math.min(enter, leave);
-    const live = solid > 0.002;
-
     const layer = sceneBox.current;
+    /* The document element's box, not the window's and not the layer's.
+       `innerWidth` counts the 15px `scrollbar-gutter: stable` reservation that
+       a fixed element does not get, and a globe placed against it is fifteen
+       pixels from where the moon comes out of it. The layer would have been
+       right until the Earth started receding — it is scaled now, so its own
+       box shrinks with it, and reading the viewport off it made the moon
+       collapse along with the planet. */
+    const view = {
+      w: document.documentElement.clientWidth,
+      h: document.documentElement.clientHeight,
+    };
+    const enter = Math.min(1, Math.max(0, (view.h - box.top) / view.h));
+    // Pixels scrolled beyond the end of the pin. `travel` is the section height
+    // less a viewport, so `bottom` crossing the fold and progress reaching 1 are
+    // the same instant, and this counts from there.
+    const past = view.h - box.bottom;
+
+    let target: Disc | null = null;
+    let rest: Disc | null = null;
+    let span: number | null = null;
+    let gone = 0;
+    let waiting: Element | null = null;
+    if (relaying) {
+      // Both moons carry the hook and CSS displays one of them; the one with a
+      // box is the one on this screen.
+      const found = Array.from(document.querySelectorAll(relaying)).find(
+        (node) => node.getBoundingClientRect().height > 1,
+      );
+      if (found) {
+        const rect = found.getBoundingClientRect();
+        target = discOf(rect);
+        // The same disc as it will be at the handover: the lock position is
+        // defined as the one that centres it, so its resting y is the middle of
+        // the screen and its x does not depend on scroll at all.
+        rest = { x: target.x, y: view.h / 2, d: target.d };
+        const emerged = window.scrollY - past + EMERGE * view.h;
+        const lock = window.scrollY + rect.top + rect.height / 2 - view.h / 2;
+        span = lock - emerged;
+        gone = window.scrollY - emerged;
+        waiting = found;
+      }
+    }
+
+    const place = placeSky({
+      view,
+      past,
+      earthDisc: earthDisc(view.w, view.h),
+      target,
+      rest,
+      travel: span,
+      travelled: gone,
+    });
+
+    const globe = Math.min(enter, place.earth.opacity);
+    const moon = relaying ? place.moon : null;
+    const moonOn = moon ? moon.opacity : 0;
+    const live = globe > 0.002;
+    const anything = live || moonOn > 0.002;
+
     if (layer) {
-      layer.style.opacity = String(solid);
+      layer.style.opacity = String(globe);
+      /* Drawn back about the globe itself, not about the middle of the window.
+         The canvas is the whole viewport and the planet is off to one side of
+         it, so scaling the layer around its own centre would send the planet
+         across the screen as it shrank. */
+      layer.style.transformOrigin = `${place.earth.x}px ${place.earth.y}px`;
+      const drift = place.earth.scale < 1;
+      const home = earthDisc(view.w, view.h);
+      layer.style.transform = drift
+        ? `translate3d(${place.earth.x - home.x}px, ${place.earth.y - home.y}px, 0) scale(${place.earth.scale})`
+        : "";
       // Not opacity alone: a transparent full-screen canvas is still a
       // full-screen canvas for the compositor.
       layer.style.visibility = live ? "visible" : "hidden";
     }
+
+    const disc = moonBox.current;
+    if (disc) {
+      if (moon && moonOn > 0.002) {
+        disc.style.visibility = "visible";
+        disc.style.opacity = String(moonOn);
+        disc.style.width = `${moon.d}px`;
+        disc.style.height = `${moon.d}px`;
+        disc.style.transform = `translate3d(${moon.x - moon.d / 2}px, ${moon.y - moon.d / 2}px, 0)`;
+        /* Brightness, not opacity: see sky-relay. A see-through moon in front
+           of the Earth undoes the one thing the sequence is saying. */
+        disc.style.filter = moon.brightness < 0.999 ? `brightness(${moon.brightness})` : "";
+        /* Two canvases cannot share a depth buffer, so "behind the Earth" and
+           "in front of it" is a z-index and nothing more. `placeSky` only
+           flips it at the one point in the arc where the discs are apart. */
+        disc.style.zIndex = moon.front ? "-4" : "-6";
+      } else {
+        disc.style.visibility = "hidden";
+      }
+    }
+
+    /*
+     * Hold the real moon back while this one is still on its way.
+     *
+     * The about section's moon fades itself in as soon as it is near, which
+     * during the journey means two moons on screen at once in different places.
+     * It is kept hidden until the relay is sitting exactly on top of it, so what
+     * the visitor sees appear is a disc already in the right place at the right
+     * size — and then the relay fades off the top of it.
+     */
+    const inbound = Boolean(
+      relaying && moon && span !== null && span > 0 && gone < span,
+    );
+    if (waiting !== held.current || inbound !== heldOn.current) {
+      held.current?.removeAttribute("data-relay-hold");
+      if (inbound) waiting?.setAttribute("data-relay-hold", "");
+      held.current = waiting;
+      heldOn.current = inbound;
+    }
+
     setSceneLive((current) => (current === live ? current : live));
+    setMoonLive((current) =>
+      current === moonOn > 0.002 ? current : moonOn > 0.002,
+    );
+    setSkyLive((current) => (current === anything ? current : anything));
 
     const next = Math.min(
       chapters.length - 1,
       Math.floor(value * chapters.length + 0.001),
     );
     setActive((current) => (current === next ? current : next));
-  }, [chapters.length]);
+  }, [chapters.length, handoff, mounted, reducedMotion]);
 
   useEffect(() => {
     let frame = 0;
@@ -202,7 +364,7 @@ export function ScrollTrail({
   }, [measure, mounted, near, reducedMotion]);
 
   /*
-   * Tell whatever section is next that it is standing in front of the globe.
+   * Tell the page that there is something lit behind it.
    *
    * Measured before adding it: the last words of a body line reach far enough
    * right to land on lit cloud, and steel type there came out at 2.2:1. The
@@ -210,15 +372,28 @@ export function ScrollTrail({
    * costs nothing to look at — a black shadow on a black background is
    * invisible until there is something bright behind the letters.
    *
-   * The next sibling rather than a name: this component does not know, and
-   * should not know, which section it was placed above.
+   * On the body rather than the next section, because with a handoff the sky no
+   * longer stops at the next section: the moon crosses experience, capabilities
+   * and into about. Marking each one in turn would mean this component knowing
+   * how far its own sky reaches, and it does not — the destination does.
    */
   useEffect(() => {
-    const after = section.current?.nextElementSibling;
-    if (!after) return;
-    after.toggleAttribute("data-scene-spill", sceneLive);
-    return () => after.removeAttribute("data-scene-spill");
-  }, [sceneLive]);
+    const body = document.body;
+    body.toggleAttribute("data-scene-spill", skyLive);
+    return () => body.removeAttribute("data-scene-spill");
+  }, [skyLive]);
+
+  /* Whatever happens to this component, the moon it was holding back is not
+     its to keep. Unmounting mid-journey would otherwise leave the about
+     section with an element that is permanently invisible. */
+  useEffect(
+    () => () => {
+      held.current?.removeAttribute("data-relay-hold");
+      held.current = null;
+      heldOn.current = false;
+    },
+    [],
+  );
 
   const showScene = mounted && reducedMotion === false;
 
@@ -267,6 +442,28 @@ export function ScrollTrail({
             pointerRef={pointerRef}
             running={sceneLive}
           />
+        </div>
+      ) : null}
+
+      {/*
+        The moon, on its own layer so it can pass behind the globe and then in
+        front of it. Sized and moved from the scroll handler; `left`/`top` stay
+        at zero and the journey is a transform, which is the difference between
+        compositing it and laying the page out again on every frame.
+
+        Mounted with the globe rather than when it is first needed. It bakes its
+        surface into a cube map on the first frame it draws, and that bake in the
+        middle of a scroll is a hitch exactly where the eye is.
+      */}
+      {showScene && near && handoff ? (
+        <div
+          ref={moonBox}
+          aria-hidden
+          data-cursor-shape="off"
+          className="pointer-events-none fixed top-0 left-0"
+          style={{ opacity: 0, visibility: "hidden", zIndex: -6 }}
+        >
+          <MoonScene phase={phase} full running={moonLive} drift={!pointerFine} />
         </div>
       ) : null}
 

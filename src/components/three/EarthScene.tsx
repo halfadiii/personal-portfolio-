@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Cadence } from "./Cadence";
+import { AIM, LENS, RANGE, WIDE_AT, standoff } from "./earth-frame";
 
 /**
  * Earth, from low orbit, with the terminator across it.
@@ -594,7 +595,7 @@ export default function EarthScene({
        */
       dpr={[1, 2]}
       gl={{ antialias: true, powerPreference: "high-performance", alpha: true }}
-      camera={{ fov: 32, near: 0.1, far: 40, position: [0, 0.9, 4.5] }}
+      camera={{ fov: LENS, near: 0.1, far: 40, position: [0, 0.9, RANGE.far] }}
       onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
     >
       <Cadence running={running} />
@@ -738,14 +739,12 @@ function Globe({
      * closer than the International Space Station and fills the frame with a
      * patch of ground.
      */
-    const rawDistance = 4.5 - p * 0.75;
-
     // A portrait frame carries the same vertical angle but far less horizontal,
     // so the distance that frames a sphere on a laptop has it spilling off both
-    // sides of a phone with a paragraph on top of it.
-    const shape = size.width / Math.max(1, size.height);
-    const distance =
-      shape < 1 ? rawDistance * Math.min(1.55, 0.8 / shape) : rawDistance;
+    // sides of a phone with a paragraph on top of it. `standoff` carries that,
+    // and `earthDisc` above reads the same function — the relay outside this
+    // file has to agree with this loop about where the planet is.
+    const distance = standoff(p, size.width, size.height);
 
     const cosH = Math.cos(height);
     scratch.pos.set(
@@ -805,13 +804,11 @@ function Globe({
      * above it rather than white cloud directly behind a paragraph.
      */
     const aspect = size.width / Math.max(1, size.height);
-    const wide = size.width >= 1024;
-    const halfH = Math.tan((32 * Math.PI) / 360) * distance;
+    const halfH = Math.tan((LENS * Math.PI) / 360) * distance;
     const halfW = halfH * aspect;
-    const wantX = wide ? 0.71 : 0.5;
-    const wantY = wide ? 0.5 : 0.78;
-    scratch.target.addScaledVector(scratch.right, -(wantX - 0.5) * 2 * halfW);
-    scratch.target.addScaledVector(scratch.up, (0.5 - wantY) * 2 * halfH);
+    const aim = size.width >= WIDE_AT ? AIM.wide : AIM.narrow;
+    scratch.target.addScaledVector(scratch.right, -(aim.x - 0.5) * 2 * halfW);
+    scratch.target.addScaledVector(scratch.up, (aim.y - 0.5) * 2 * halfH);
 
     camera.position.copy(scratch.pos);
     camera.lookAt(scratch.target);

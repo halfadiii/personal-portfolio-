@@ -24,7 +24,13 @@ export default async function HomePage() {
 
       <Hero caseStudies={caseStudies} />
       <SelectedWork caseStudies={caseStudies} />
-      <ScrollTrail chapters={trailChapters} label="How I approach a problem" />
+      <ScrollTrail
+        chapters={trailChapters}
+        label="How I approach a problem"
+        /* The globe does not simply end. A moon comes out from behind it during
+           experience and travels to the one §6 draws, which is this. */
+        handoff="[data-sky-moon]"
+      />
       <Experience />
       <Capabilities />
       <OffClock />
