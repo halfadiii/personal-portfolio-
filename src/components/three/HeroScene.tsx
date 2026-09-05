@@ -292,6 +292,8 @@ export default function HeroScene({
   return (
     <div
       ref={wrapper}
+      /* The fade at the foot of it is in globals.css — see [data-hero-canvas]. */
+      data-hero-canvas
       className="absolute inset-0 touch-pan-y select-none data-[dragging]:cursor-grabbing"
       // Decorative: the same projects are listed as real controls beside it.
       aria-hidden

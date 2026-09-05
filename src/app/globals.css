@@ -589,6 +589,30 @@
   color: var(--signal);
 }
 
+/* The foot of the orbit's canvas, faded out.
+
+   A canvas has an edge and the light does not care: on a short window the
+   star's glow is still bright when it reaches the bottom of the section, and
+   what you see is a horizontal line across the page with warm light above it
+   and nothing below. Tapering the last fifth of the canvas means the scene runs
+   out of light before it runs out of canvas, so there is no step to see — and
+   the wash below picks the light up and carries it on.
+
+   Kept to the last fifth, and shallow, because that band is not always empty:
+   the scene frames itself to its box, so on a short window the orbit sits low
+   and a deeper taper takes the brightness out of the two planets nearest the
+   bottom. This is enough to remove the step and little enough to leave them. */
+[data-hero-canvas] {
+  --hero-foot: linear-gradient(
+    to bottom,
+    #000 82%,
+    rgba(0, 0, 0, 0.6) 93%,
+    transparent 100%
+  );
+  -webkit-mask-image: var(--hero-foot);
+  mask-image: var(--hero-foot);
+}
+
 /* The star's reach, past the section that holds it.
 
    Positioned from `Sunlight`, which projects the same star the planets shade
