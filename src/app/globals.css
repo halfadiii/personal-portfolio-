@@ -253,9 +253,14 @@
     break-after: avoid-page;
   }
 
-  li,
-  section,
-  article {
+  /* Keep a single job, project or bullet whole across a page break — but only
+     those. `section` and `article` were in here too, and on the résumé those
+     are the page-sized containers: the whole document is one article, and
+     experience alone is taller than a sheet. Telling the printer not to break
+     inside something that cannot fit does not make it fit; it pushes the block
+     whole and leaves the rest of the sheet blank, which is how a three-page
+     résumé printed as four with gaps in it. */
+  li {
     break-inside: avoid;
   }
 }
