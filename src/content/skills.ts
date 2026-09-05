@@ -1,22 +1,39 @@
 import type { SkillGroup } from "./types";
 
+/**
+ * The résumé's five groups, in the résumé's order.
+ *
+ * These were four groups shaped differently — reporting tools sat with the
+ * languages, and platforms sat with the AI work. Splitting analytics and
+ * reporting out is the résumé's arrangement and it reads better: what he
+ * builds *with* is separable from what he builds *in*.
+ */
 export const skills: SkillGroup[] = [
   {
-    label: "Languages & BI",
+    label: "Languages",
     items: [
       "SQL",
       "Python (pandas, NumPy, scikit-learn)",
       "R",
-      "Power BI",
-      "Tableau",
       "DAX",
       "Power Query",
-      "Excel",
       "Git",
     ],
   },
   {
-    label: "Statistics & ML",
+    label: "Analytics & reporting",
+    items: [
+      "Power BI",
+      "Tableau",
+      "Excel",
+      "Microsoft Fabric",
+      "KPI dashboards",
+      "Data storytelling",
+      "Executive reporting",
+    ],
+  },
+  {
+    label: "Statistical methods",
     items: [
       "Regression",
       "Time-series forecasting",
@@ -25,17 +42,16 @@ export const skills: SkillGroup[] = [
       "Segmentation",
       "Feature engineering",
       "EDA",
-      "MLOps",
     ],
   },
   {
-    label: "Data engineering",
+    label: "Data operations",
     items: [
       "ETL/ELT",
       "dbt",
       "Airflow",
       "Spark",
-      "Star-schema modeling",
+      "Dimensional/star-schema modeling",
       "Warehousing",
       "Cleansing",
       "Validation",
@@ -43,15 +59,16 @@ export const skills: SkillGroup[] = [
     ],
   },
   {
-    label: "Platforms & AI",
+    label: "Platforms & databases",
     items: [
       "BigQuery",
       "Snowflake",
-      "GCP/AWS/Azure",
-      "PostgreSQL/MySQL/SQL Server",
+      "GCP/AWS",
+      "PostgreSQL",
+      "MySQL",
+      "SQL Server",
       "LLMs",
       "RAG",
-      "Prompt engineering",
       "Vector DBs",
     ],
   },

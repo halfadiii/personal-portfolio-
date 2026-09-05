@@ -131,6 +131,12 @@ export default function ResumePage() {
                   {education.school} · {education.location} · GPA{" "}
                   {education.gpa}
                 </p>
+                {education.coursework ? (
+                  <p className="text-small text-steel mt-1 print:text-[9.5pt]">
+                    <span className="text-signal">Relevant coursework: </span>
+                    {education.coursework.join(", ")}
+                  </p>
+                ) : null}
               </div>
             </div>
           </ResumeSection>

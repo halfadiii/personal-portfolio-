@@ -10,8 +10,11 @@ export const profile: Profile = {
     linkedin: "https://www.linkedin.com/in/halfadi/",
     github: "https://github.com/halfadiii",
   },
+  // Third person, unlike the résumé's implied first person: this string is also
+  // the meta description and the schema.org description, where a sentence
+  // starting "Build governed pipelines" reads as an instruction.
   positioning:
-    "Analytics professional with a Master's in Data Science and 3+ years across BI and data engineering. Builds governed pipelines in dbt, BigQuery, and GCP, then turns them into Power BI and SQL reporting leadership acts on.",
+    "Analytics professional with a Master's in Data Science and 3+ years across BI and data engineering. Builds governed pipelines in dbt, BigQuery, and GCP, then turns them into Power BI and SQL reporting leadership acts on. Drove a 65% rise in dashboard adoption, cut reporting cycles 40%, and lifted source reliability to 95%.",
   headlineMetrics: [
     { value: "1.2M+", label: "transaction records analysed" },
     { value: "65%", label: "rise in dashboard adoption" },
@@ -27,4 +30,15 @@ export const education: Education = {
   start: "2024-08",
   end: "2025-12",
   location: "Buffalo, NY",
+  coursework: [
+    "Business Analytics",
+    "Data Visualization",
+    "Predictive Analytics",
+    "Reporting Automation",
+    "Cloud Analytics",
+    "BigQuery",
+    "Tableau",
+    "DAX",
+    "Microsoft Fabric",
+  ],
 };

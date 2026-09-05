@@ -82,6 +82,12 @@ export default function AboutPage() {
             <p className="label-mono mt-2">
               {education.school} · {education.location} · GPA {education.gpa}
             </p>
+            {education.coursework ? (
+              <p className="measure text-small text-steel mt-3">
+                <span className="text-signal">Relevant coursework: </span>
+                {education.coursework.join(", ")}
+              </p>
+            ) : null}
           </div>
         </div>
       </section>

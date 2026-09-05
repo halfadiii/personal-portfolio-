@@ -52,4 +52,6 @@ export type Education = {
   start: string;
   end: string;
   location: string;
+  /** Named modules, where they say something a degree title does not. */
+  coursework?: string[];
 };

@@ -94,7 +94,9 @@ test("with JavaScript disabled the text content is present", async ({
   // projects there are, and the point of this test is that the copy
   // renders at all without JavaScript.
   await expect(page.getByText(/\w+ things I built\./)).toBeVisible();
-  await expect(page.getByText("Five roles, one throughline.")).toBeVisible();
+  // Same reason: the role count is derived too, and pinning it here just means
+  // this test fails the next time a job is added rather than catching anything.
+  await expect(page.getByText(/\w+ roles, one throughline\./)).toBeVisible();
   await expect(page.locator("#preloader")).toBeHidden();
   await context.close();
 });

@@ -21,7 +21,9 @@ export function Capabilities() {
           title="What the work is built with."
         />
 
-        <dl className="mt-12 grid grid-cols-1 gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Five columns from lg, one per group, so the row stays whole. At
+            four it wrapped the fifth group onto a row of its own. */}
+        <dl className="mt-12 grid grid-cols-1 gap-x-6 sm:grid-cols-2 lg:grid-cols-5">
           {skills.map((group) => (
             <div key={group.label} className="rule-top py-5 lg:py-0 lg:pr-6">
               <dt className="label-mono text-signal">{group.label}</dt>

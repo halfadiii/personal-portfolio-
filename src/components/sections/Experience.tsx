@@ -11,6 +11,19 @@ import { formatRange } from "@/lib/utils";
  * still open (§2.5), and dropping the primitive kept the home page inside the
  * 180 KB budget (§8). Keyboard and screen-reader behaviour come free.
  */
+/** Spelled out at the size this heading is set; digits look like a typo there. */
+const COUNT_WORD: Record<number, string> = {
+  1: "One",
+  2: "Two",
+  3: "Three",
+  4: "Four",
+  5: "Five",
+  6: "Six",
+  7: "Seven",
+  8: "Eight",
+  9: "Nine",
+};
+
 export function Experience() {
   return (
     <section
@@ -27,8 +40,12 @@ export function Experience() {
               experience[0].end,
             ).toLowerCase()}
           </p>
+          {/* Counted, not typed. This read "Five roles" for a day after the
+              three Google entries became one, which is the kind of wrong a
+              heading stays until somebody happens to look at it. */}
           <h2 id="experience-title" className="font-display text-section">
-            Five roles, one throughline.
+            {COUNT_WORD[experience.length] ?? experience.length} roles, one
+            throughline.
           </h2>
         </header>
 
