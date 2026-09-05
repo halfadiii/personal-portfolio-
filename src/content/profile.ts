@@ -2,7 +2,11 @@ import type { Education, Profile } from "./types";
 
 export const profile: Profile = {
   name: "Aditya Aryan",
-  role: "Data analyst / analytics engineer",
+  /* Title case, not the sentence case the rest of the site uses. This one is a
+     job title rather than a sentence: it is the browser tab, the link preview
+     card, the line under his name and the jobTitle in the structured data, and
+     in every one of those it is a label. */
+  role: "Data Analyst / Analytics Engineer",
   location: "New York City, NY",
   email: "adityaaryan541@gmail.com",
   phone: "+1 (716) 697-7737",
