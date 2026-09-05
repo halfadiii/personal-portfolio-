@@ -570,9 +570,28 @@ function useMaps(anisotropy: number) {
 
 /* ----------------------------------------------------------------- scene */
 
+/**
+ * How the globe is framed, when something outside wants a say.
+ *
+ * `scale` is a fraction of the size it would otherwise be drawn at, and x and y
+ * are where its centre goes as fractions of the frame. Both are applied through
+ * the camera — further back, aimed elsewhere — and not with a CSS transform on
+ * the canvas.
+ *
+ * That distinction is the whole reason this exists. Scaling the canvas element
+ * scales an image that was already clipped at its own edges: the atmosphere
+ * runs past the bottom and right of the frame at rest, which reads as bleed
+ * until the layer shrinks and drags those straight cut edges into the middle of
+ * the picture. Moving the camera has no edge to reveal, and redraws at full
+ * resolution instead of resampling.
+ */
+export type EarthFrame = { scale: number; x: number; y: number };
+
 export type EarthSceneProps = {
   /** 0..1 across the whole pinned section. */
   progressRef: React.RefObject<number>;
+  /** Optional override for the shot. Left out, the globe frames itself. */
+  frameRef?: React.RefObject<EarthFrame>;
   /** Cursor over the section in -1..1, and whether there is one. */
   pointerRef: React.RefObject<{ x: number; y: number; on: number }>;
   /** False once the section has been scrolled past; stops the render loop. */
@@ -581,6 +600,7 @@ export type EarthSceneProps = {
 
 export default function EarthScene({
   progressRef,
+  frameRef,
   pointerRef,
   running,
 }: EarthSceneProps) {
@@ -599,16 +619,22 @@ export default function EarthScene({
       onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
     >
       <Cadence running={running} />
-      <Globe progressRef={progressRef} pointerRef={pointerRef} />
+      <Globe
+        progressRef={progressRef}
+        frameRef={frameRef}
+        pointerRef={pointerRef}
+      />
     </Canvas>
   );
 }
 
 function Globe({
   progressRef,
+  frameRef,
   pointerRef,
 }: {
   progressRef: EarthSceneProps["progressRef"];
+  frameRef: EarthSceneProps["frameRef"];
   pointerRef: EarthSceneProps["pointerRef"];
 }) {
   const gl = useThree((state) => state.gl);
@@ -742,9 +768,15 @@ function Globe({
     // A portrait frame carries the same vertical angle but far less horizontal,
     // so the distance that frames a sphere on a laptop has it spilling off both
     // sides of a phone with a paragraph on top of it. `standoff` carries that,
-    // and `earthDisc` above reads the same function — the relay outside this
-    // file has to agree with this loop about where the planet is.
-    const distance = standoff(p, size.width, size.height);
+    // and `earthDisc` in earth-frame reads the same function — the relay
+    // outside this file has to agree with this loop about where the planet is.
+    //
+    // Anything smaller than full size is bought with distance rather than with
+    // a scale on the canvas: apparent size goes as one over the range, so a
+    // third of the size is three times as far away.
+    const shot = frameRef?.current;
+    const shrink = Math.min(1, Math.max(0.02, shot?.scale ?? 1));
+    const distance = standoff(p, size.width, size.height) / shrink;
 
     const cosH = Math.cos(height);
     scratch.pos.set(
@@ -806,7 +838,8 @@ function Globe({
     const aspect = size.width / Math.max(1, size.height);
     const halfH = Math.tan((LENS * Math.PI) / 360) * distance;
     const halfW = halfH * aspect;
-    const aim = size.width >= WIDE_AT ? AIM.wide : AIM.narrow;
+    const base = size.width >= WIDE_AT ? AIM.wide : AIM.narrow;
+    const aim = shot ? { x: shot.x, y: shot.y } : base;
     scratch.target.addScaledVector(scratch.right, -(aim.x - 0.5) * 2 * halfW);
     scratch.target.addScaledVector(scratch.up, (aim.y - 0.5) * 2 * halfH);
 

@@ -57,6 +57,8 @@ function discOf(box: DOMRect): Disc {
 export type TrailSceneComponent = React.ComponentType<{
   progressRef: React.RefObject<number>;
   pointerRef: React.RefObject<{ x: number; y: number; on: number }>;
+  /** Optional: a scene that lets the section reframe it during a handover. */
+  frameRef?: React.RefObject<{ scale: number; x: number; y: number }>;
   running: boolean;
 }>;
 
@@ -98,6 +100,8 @@ export function ScrollTrail({
   // the left half of it, and the strand should still answer the cursor there.
   const pointerRef = useRef({ x: 0, y: 0, on: 0 });
   const sceneBox = useRef<HTMLDivElement>(null);
+  /** Written every frame, read by the scene. Never causes a render. */
+  const frameRef = useRef({ scale: 1, x: 0.71, y: 0.5 });
   const moonBox = useRef<HTMLDivElement>(null);
   /** The moon being held back, and whether it currently is. */
   const held = useRef<Element | null>(null);
@@ -266,18 +270,25 @@ export function ScrollTrail({
     const live = globe > 0.002;
     const anything = live || moonOn > 0.002;
 
+    /*
+     * The globe's size and position go to the camera, not to the layer.
+     *
+     * The first version of this scaled the canvas element. Two things were
+     * wrong with that and both were visible. It scaled about the planet's
+     * *moving* centre while also translating by the same delta, which is one
+     * correction too many — the globe landed 254px from where the arithmetic
+     * had put it, and was then hidden by a coverage test that believed the
+     * arithmetic, so it blinked out with 50px of itself still outside the moon.
+     * And the canvas image is clipped at its own edges, so shrinking it pulled
+     * the straight cut through the atmosphere at the bottom and right of the
+     * frame into the middle of the picture.
+     */
+    frameRef.current.scale = place.earth.scale;
+    frameRef.current.x = place.earth.x / view.w;
+    frameRef.current.y = place.earth.y / view.h;
+
     if (layer) {
       layer.style.opacity = String(globe);
-      /* Drawn back about the globe itself, not about the middle of the window.
-         The canvas is the whole viewport and the planet is off to one side of
-         it, so scaling the layer around its own centre would send the planet
-         across the screen as it shrank. */
-      layer.style.transformOrigin = `${place.earth.x}px ${place.earth.y}px`;
-      const drift = place.earth.scale < 1;
-      const home = earthDisc(view.w, view.h);
-      layer.style.transform = drift
-        ? `translate3d(${place.earth.x - home.x}px, ${place.earth.y - home.y}px, 0) scale(${place.earth.scale})`
-        : "";
       // Not opacity alone: a transparent full-screen canvas is still a
       // full-screen canvas for the compositor.
       layer.style.visibility = live ? "visible" : "hidden";
@@ -439,6 +450,7 @@ export function ScrollTrail({
         >
           <Scene
             progressRef={progressRef}
+            frameRef={frameRef}
             pointerRef={pointerRef}
             running={sceneLive}
           />

@@ -94,6 +94,17 @@ const SEED = 0.3;
 const HANDOVER = 0.55;
 
 /**
+ * How far the journey bows out of the straight line, as a fraction of the frame.
+ *
+ * A body that has just come round a planet and then slides flat across to the
+ * edge stops being a body and becomes a sprite on a rail. The bow keeps it on
+ * an arc — it is the same movement it arrived on, continuing — and costs one
+ * sine. Perpendicular to the line it is travelling, so it works whichever way
+ * the destination happens to lie.
+ */
+const BOW = 0.14;
+
+/**
  * How bright the Moon is while it is still crossing the page, against the 1 it
  * arrives at.
  *
@@ -250,10 +261,21 @@ export function placeSky({
     // be. At the moment `k` reaches 1 these are the same disc, which is what
     // makes the change of destination invisible.
     const dest = travelled >= travel ? target : rest;
-    disc = {
+    const flat = {
       x: mix(disc.x, dest.x, k),
       y: mix(disc.y, dest.y, k),
       d: mix(disc.d, dest.d, k),
+    };
+    // Perpendicular to the run, peaking in the middle and exactly zero at both
+    // ends — so neither the departure nor the arrival is moved by it.
+    const runX = dest.x - disc.x;
+    const runY = dest.y - disc.y;
+    const len = Math.hypot(runX, runY) || 1;
+    const bow = Math.sin(Math.PI * k) * BOW * view.h;
+    disc = {
+      x: flat.x + (-runY / len) * bow,
+      y: flat.y + (runX / len) * bow,
+      d: flat.d,
     };
     // The planet is riding inside the Moon by now, so it goes wherever it goes.
     earth.x = mix(earth.x, disc.x, k);
