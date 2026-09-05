@@ -261,9 +261,25 @@ const MOON_FRAG = /* glsl */ `
     vec3 tint = mix(vec3(0.85, 0.88, 0.97), vec3(1.02, 0.99, 0.94), albedo);
     vec3 colour = tint * albedo * shade * 1.42;
 
-    // Earthshine. The unlit side is not black: a gibbous Earth hangs over it,
-    // four times as wide as the Moon is from here and a great deal brighter.
-    colour += vec3(0.15, 0.18, 0.27) * max(-toSun, 0.0) * uEarthshine;
+    /*
+     * Earthshine. The unlit side is not black: a gibbous Earth hangs over it,
+     * four times as wide as the Moon is from here and a great deal brighter.
+     *
+     * It is lit by something, so it obeys the same two rules the sunlit side
+     * does. It takes the albedo — earthshine is the one light in which the
+     * maria are famously visible, and without it the night side comes out as
+     * one flat colour with no surface on it. And it falls off toward the limb,
+     * where the ground is turning away from the eye, so the disc fades into
+     * space instead of ending at one.
+     *
+     * Both were missing, and at the size this is drawn during the handover
+     * from the globe the result read as a cut-out: a slate disc with a hard
+     * edge rather than a body in shadow. Half a disc, which is all the about
+     * section ever shows of it, hid that for as long as this only lived there.
+     */
+    float dark = max(-toSun, 0.0);
+    float turn = pow(toEye, 0.7);
+    colour += vec3(0.15, 0.18, 0.27) * albedo * dark * turn * uEarthshine;
 
     gl_FragColor = vec4(colour, 1.0);
   }
