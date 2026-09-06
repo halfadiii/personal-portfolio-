@@ -50,11 +50,21 @@ const CLIMB = 0.62;
 const WEAVE_RADIAL = 0.3;
 const WEAVE_VERTICAL = 0.24;
 /**
- * Where the craft parks, above the planet's centre. Clear of the largest
- * planet's radius plus the length of its own tail, so it stands on the surface
- * rather than sinking into it.
+ * How far the craft's centre sits above whatever it is standing on.
+ *
+ * Its own nozzle, and nothing more. Measured off the geometry above rather than
+ * chosen: the body runs to -0.05, the fins to -0.058, and the nozzle is the
+ * lowest thing on it at -0.072. The plume reaches -0.138, but a plume is not
+ * landing gear and by touchdown there is no thrust behind it.
+ *
+ * Two errors were stacked here. The height was a single 0.44 chosen to clear
+ * the *largest* planet, so on the other six the craft rested a quarter of a
+ * unit over the surface, which is sixty per cent of one of those planets' own
+ * diameter. And 0.44 was itself the flame's reach rather than the hull's, so
+ * even on the large one it hovered another 0.068. Per planet, and to the
+ * nozzle, it stands on the ground.
  */
-const PARK_HEIGHT = 0.44;
+const TAIL_CLEAR = 0.072;
 /** Where the coast hands over to the landing burn. */
 const TOUCH_FROM = 0.62;
 /** Length of that burn, as a fraction of the transfer. */
@@ -251,11 +261,14 @@ const SPARK_FRAG = /* glsl */ `
 export function Rocket({
   count,
   radius,
+  sizes,
   frontRef,
   sunRef,
 }: {
   count: number;
   radius: number;
+  /** Radius of each planet, in ring order. The craft stands on top of these. */
+  sizes: number[];
   /** Index of the planet currently at the front, written by the orbit. */
   frontRef: React.RefObject<number>;
   sunRef: React.RefObject<THREE.Vector3>;
@@ -294,6 +307,10 @@ export function Rocket({
     /** Phase and sign of the weave, fixed per destination. */
     phase: 0,
     lean: 1,
+    /** Pad height at each end of the current leg. They differ whenever the two
+     *  planets do, which is most legs. */
+    parkFrom: 0.44,
+    parkTo: 0.44,
     /** The burn's initial conditions, read off the coast when a leg begins. */
     hold: new THREE.Vector3(),
     holdVel: new THREE.Vector3(),
@@ -319,6 +336,13 @@ export function Rocket({
     watch.observe(root, { attributes: true, attributeFilter: ["data-rocket"] });
     return () => watch.disconnect();
   }, []);
+
+  /** How high the craft's centre rides over planet `i`. */
+  const parkAt = useMemo(() => {
+    return (i: number) =>
+      (sizes[((i % sizes.length) + sizes.length) % sizes.length] ?? 0.3) +
+      TAIL_CLEAR;
+  }, [sizes]);
 
   const scratch = useMemo(
     () => ({
@@ -346,11 +370,11 @@ export function Rocket({
       const drop = smoothstep(0, 1, c);
       return into.set(
         Math.sin(angle) * r,
-        PARK_HEIGHT + ARRIVE_HEIGHT * (1 - drop),
+        parkAt(flight.current.target) + ARRIVE_HEIGHT * (1 - drop),
         Math.cos(angle) * r,
       );
     };
-  }, [radius, step]);
+  }, [parkAt, radius, step]);
 
   /**
    * The crossing, before the engine relights. Lift, arch, weave, drift down.
@@ -382,8 +406,12 @@ export function Rocket({
       // hanging at cruise height.
       const hold =
         smoothstep(0, 0.22, c) * (1 - SETTLE * smoothstep(0.34, 1.0, c));
+      /* Drifts from the pad it left to the pad it is going to, because those
+         are different heights whenever the two planets are different sizes.
+         Anchored at c = 0 so there is no step as it lifts off, and the burn
+         takes the last of it to `pad.y` regardless. */
       const y =
-        PARK_HEIGHT +
+        state.parkFrom + (state.parkTo - state.parkFrom) * c +
         CLIMB * hold +
         WEAVE_VERTICAL *
           weave *
@@ -417,7 +445,7 @@ export function Rocket({
         .multiplyScalar(1 / (e * e));
 
       const to = state.fromAngle + state.sweep;
-      state.pad.set(Math.sin(to) * radius, PARK_HEIGHT, Math.cos(to) * radius);
+      state.pad.set(Math.sin(to) * radius, state.parkTo, Math.cos(to) * radius);
     };
   }, [coastAt, radius, scratch]);
 
@@ -475,6 +503,8 @@ export function Rocket({
       state.fromAngle = wanted * step;
       state.sweep = 0;
       state.t = 1;
+      state.parkFrom = parkAt(wanted);
+      state.parkTo = state.parkFrom;
       solveBurn();
       // Unless the loading screen is still up, in which case this craft has
       // not landed yet — it is the one that just left the pad up there.
@@ -495,6 +525,10 @@ export function Rocket({
       // the same way and the system stays deterministic.
       state.phase = (wanted * 2.399963) % (Math.PI * 2);
       state.lean = wanted % 2 === 0 ? 1 : -1;
+      // Leaving from the height it is actually at, not from a nominal pad: it
+      // may be departing mid-flight, halfway through somebody else's leg.
+      state.parkFrom = scratch.here.y;
+      state.parkTo = parkAt(wanted);
       state.target = wanted;
       state.t = 0;
       solveBurn();

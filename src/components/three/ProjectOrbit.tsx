@@ -129,12 +129,25 @@ export function ProjectOrbit({
         <Rocket
           count={projects.length}
           radius={radius}
+          sizes={projects.map((project) => planetSize(Boolean(project.featured)))}
           frontRef={frontRef}
           sunRef={sunRef}
         />
       </group>
     </group>
   );
+}
+
+/**
+ * How big a planet is drawn, in world units of radius.
+ *
+ * Exported because the rocket has to stand on these. It used to park at a
+ * single height chosen to clear the largest of them, which meant it hovered a
+ * quarter of a unit over every other one: sixty per cent of a small planet's
+ * own diameter, hanging in space above the surface it had just landed on.
+ */
+export function planetSize(featured: boolean) {
+  return featured ? 0.3 : 0.2;
 }
 
 /** The ring itself: a thin circle, so the path is legible when nothing moves. */
@@ -226,7 +239,7 @@ function Planet({
     [angle, radius],
   );
 
-  const size = featured ? 0.3 : 0.2;
+  const size = planetSize(featured);
   const shape = BODIES[index % BODIES.length];
 
   // CSS variables do not reach WebGL, so the token value is resolved once.

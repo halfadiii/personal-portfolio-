@@ -64,9 +64,13 @@ export const offClock: OffClockCard[] = [
     label: "runs on",
     name: "Coffee",
     art: {
-      src: "/media/coffee.jpg",
-      alt: "A stovetop moka pot, lid to handle, on a pale paper ground.",
-      position: "50% 50%",
+      src: "/media/coffee.webp",
+      alt: "Espresso pulling from a machine into a small cup, steam rising off it.",
+      /* The card is landscape and the photograph is tall, so a little over half
+         its height is cropped away. Held slightly above centre: that keeps the
+         spout, the stream and the cup, and loses the machine above them, which
+         is the part that reads as any coffee machine anywhere. */
+      position: "50% 45%",
     },
   },
 ];
