@@ -13,7 +13,7 @@ what you are looking at, section 5 to find your way around the files, and
 sections 17 and 18 before you change anything, because most of the code that
 looks strange in here is code that is the way it is for a measured reason.
 
-Last updated: 2026-09-05, at commit `25f0630`.
+Last updated: 2026-09-06, at commit `eb7396b`.
 
 ---
 
@@ -666,9 +666,22 @@ rather than a diagonal skid. Each axis flies a quintic arriving at zero velocity
 and zero acceleration. It flips retrograde over the top of the arc, rate-limited
 to 300 degrees a second, and touches down within a degree of vertical.
 
-Park height is `planetSize(featured) + TAIL_CLEAR` where `TAIL_CLEAR = 0.072`,
-measured to the **nozzle**, which is the lowest thing on the craft. See section
-18 for why that is worth stating.
+Park height comes from `standoff(size, pole)`, which is `size / pole +
+TAIL_CLEAR`. `TAIL_CLEAR = 0.072` is measured to the **nozzle**, the lowest
+thing on the craft. `pole` is how much of an offset along the planet's axis
+survives the projection, written each frame from the camera: 1 with the camera
+level with the orbit plane, 0.66 on a phone, where it climbs to frame the ring.
+
+The division is the whole point. The craft stands on the pole, and a pole is
+the one place on a sphere that a camera looking down at it cannot show you, so
+the clearance has to be solved in the picture or the craft is drawn inside the
+planet. It puts the foot on the *drawn* limb at any angle, and at `pole = 1` it
+returns `size + TAIL_CLEAR` exactly, so the edge-on case is the plain
+world-space landing.
+
+The pad is also re-derived every frame while parked, rather than being solved
+once per leg and held. See section 18 for both, and for what happens if you
+forget the second one.
 
 ### `EarthScene` + `earth-frame.ts` — the Earth
 
@@ -1167,6 +1180,20 @@ averages cannot answer.
 - **`shoot.mjs`** writes full-page screenshots and reports any route/width that
   scrolls horizontally.
 
+### A trap in the test setup, worth knowing before it costs you an hour
+
+`playwright.config.ts` sets `reuseExistingServer: !process.env.CI`. Locally that
+means **the suite will happily test whatever is already listening on port 3100**,
+including a build of code you have since changed. On 2026-09-06 that produced
+twelve confident failures, a bisect against `git stash` that appeared to confirm
+them, and a wrong conclusion, before the port was freed and the same code passed
+40/40.
+
+If the suite fails in a way that makes no sense — home-page tests timing out on
+the preloader is the signature — kill anything on 3100 and run it again. And do
+not leave stray `next start` servers around: several production servers plus the
+suite's own four workers is enough contention on its own to time tests out.
+
 ### One known console notice
 
 On desktop only: `THREE.Clock: This module has been deprecated`. It comes from
@@ -1217,7 +1244,7 @@ replaced.
 
 ## 17. Complete change history
 
-Thirty commits, 2026-09-01 to 2026-09-05. In order.
+Thirty-two commits, 2026-09-01 to 2026-09-06. In order.
 
 ### Phase 1: the build (2026-09-01 to 09-04)
 
@@ -1397,10 +1424,14 @@ work section."
 
 **`25f0630` Make the shortfall mark show its number.** See section 18.
 
+### Phase 6: the record, and the landing again (09-05 to 09-06)
+
 **`349d0de` Write the master file.** This document.
 
-**Land the craft on the planet on a phone, and on the first go.** The stale pad
-and the world-space clearance, both in section 18.
+**`eb7396b` Land the craft on the planet on a phone, and on the first go.** The
+stale pad and the world-space clearance, both in section 18. Reported a second
+time after `dbdb507` had already been called a fix for it, which is the useful
+part: `dbdb507` fixed a real fault and left two others standing behind it.
 
 ---
 
@@ -1552,6 +1583,13 @@ his; the six in the morning was not.
   main-thread work.
 - **Lighthouse's mobile LCP is simulated**, and swings 2.3 to 3.1 seconds between
   identical runs on this page. Both it and the measured 0.70s are reported.
+- **When a scene disagrees with the maths, make the scene say what it thinks.**
+  Screenshots tell you something is wrong; they are poor at telling you what. A
+  temporary `window.__thing = {...}` in the frame loop, read back through
+  Playwright and then deleted, settles in one line what an hour of measuring
+  pixels only narrows down. R3F does not expose its store on the canvas, and
+  walking the React fiber to find it does not work either — instrument the
+  component.
 - **A dev server is not the product.** It doubles the loading screen's blocking
   time, and "janky" reported from a dev server is usually that, or Chrome falling
   back to the integrated GPU.
