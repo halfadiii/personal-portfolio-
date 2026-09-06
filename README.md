@@ -3,6 +3,12 @@
 Built to the brief in `../portfolio-master-prompt.md`. Section references below
 (§4.1, §6.5, and so on) point at that document.
 
+> **[MASTER_FILE.md](./MASTER_FILE.md) is the complete account of this project** —
+> every feature, every scene, every deliberate departure, the full change
+> history, the mistakes and what they taught, and the open items. Read that
+> first if you are new here, or if you are an AI being handed this repository.
+> This README is the shorter developer-facing summary.
+
 ```bash
 npm install
 npm run dev          # http://localhost:3000
