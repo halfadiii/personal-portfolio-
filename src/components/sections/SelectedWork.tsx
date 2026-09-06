@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { projectMetrics, projects } from "@/content";
 import { SectionHeading } from "@/components/site/SectionHeading";
+import { MetricMark } from "@/components/viz/MetricMark";
 import { cn } from "@/lib/utils";
 
 /**
@@ -139,15 +140,21 @@ function WorkCard({
       <p className="label-mono mt-auto">{stack.join(" · ")}</p>
 
       {metric ? (
-        /* The number, without the little chart that used to sit above it.
-           Nine boxes with one filled, a bar with a marker on it, a line between
-           two dots: at the size a card gives them they carried nothing the
-           sentence underneath did not already say, and seven of them down a
-           page read as decoration. The figures stay; the drawings go. */
-        <p className="label-mono text-steel">
-          <span className="sr-only">Key measure: </span>
-          {describeShort(metric)}
-        </p>
+        /* The mark sits with the caption that reads it out, not behind the
+           title: a filled bar under white type erases the headline, and a
+           number worth drawing is worth leaving on screen. Its height is
+           reserved by the SVG's own aspect ratio, so nothing shifts. */
+        <div className="flex flex-col gap-1.5">
+          <MetricMark
+            metric={metric}
+            labelled={false}
+            className="max-w-[13rem]"
+          />
+          <p className="label-mono text-steel">
+            <span className="sr-only">Key measure: </span>
+            {describeShort(metric)}
+          </p>
+        </div>
       ) : null}
 
       {href ? (
