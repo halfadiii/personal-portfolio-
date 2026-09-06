@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  *
  * Each form is chosen by what the source material actually supports: a genuine
  * before/after draws a two-point delta, a point measurement draws a level bar
- * against its ceiling, a shortfall draws below a baseline, a cardinality draws
+ * against its ceiling, a shortfall draws the gap it leaves in one, a cardinality draws
  * that many units. Nothing is interpolated into a time series.
  *
  * Pure SVG with a fixed viewBox, so it costs no JavaScript and reserves its own
@@ -107,26 +107,59 @@ function Mark({ metric }: { metric: ProjectMetric }) {
       );
     }
     case "shortfall": {
-      const baseline = H / 2 - 6;
-      const drop = Math.min(metric.value, 60) * 0.55;
+      /*
+       * The same vocabulary as a level: an outlined track for the thing being
+       * measured against, filled to where it actually got, and the empty tail
+       * is the shortfall.
+       *
+       * It used to encode the number as the *thickness* of a full-width block
+       * hanging under a dashed line — nineteen per cent came out as ten pixels
+       * of depth in a fifty-six pixel box, with nothing to compare it to, so it
+       * read as a solid bar and the figure was invisible. It also silently
+       * saturated at sixty. A fifth of the track left empty is a fifth you can
+       * see.
+       */
+      const track = W - 12;
+      const short = Math.min(100, Math.max(0, metric.value));
+      const reached = ((100 - short) / 100) * track;
       return (
         <>
-          <line
-            x1="6"
-            x2={W - 6}
-            y1={baseline}
-            y2={baseline}
-            stroke="var(--steel)"
+          <rect
+            x="6"
+            y={H / 2 - 5}
+            width={track}
+            height="10"
+            fill="none"
+            stroke="var(--hairline)"
             strokeWidth="1"
-            strokeDasharray="3 3"
           />
           <rect
             x="6"
-            y={baseline}
-            width={W - 12}
-            height={drop}
+            y={H / 2 - 5}
+            width={reached}
+            height="10"
             fill="var(--signal)"
             opacity="0.9"
+          />
+          {/* Where it stopped. The gap from here to the end of the track is
+              the number the caption quotes. */}
+          <line
+            x1={6 + reached}
+            x2={6 + reached}
+            y1={H / 2 - 13}
+            y2={H / 2 + 13}
+            stroke="var(--signal)"
+            strokeWidth="1"
+          />
+          {/* Target, at the end of the track. */}
+          <line
+            x1={6 + track}
+            x2={6 + track}
+            y1={H / 2 - 13}
+            y2={H / 2 + 13}
+            stroke="var(--steel)"
+            strokeWidth="1"
+            strokeDasharray="3 3"
           />
         </>
       );
