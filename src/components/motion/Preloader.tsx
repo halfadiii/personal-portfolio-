@@ -5,10 +5,10 @@ import { useEffect } from "react";
 /**
  * §6.1 / §4.4 — the one orchestrated moment on the site.
  *
- * A mono counter runs 000→100 while fonts and the constellation settle; on
- * completion the counter collapses, the fragments arrive at their slots, and
- * the name expands along the Archivo width axis. ~4.3s, skippable by any key or
- * click, once per session.
+ * A launch countdown runs T-3, T-2, T-1 while fonts and the constellation
+ * settle; at T-0 the craft leaves the pad, the fragments arrive at their slots,
+ * and the name expands along the Archivo width axis. ~3.9s, skippable by any
+ * key or click, once per session.
  *
  * Deliberately written with requestAnimationFrame and CSS transitions rather
  * than GSAP: this runs inside the load window, and pulling a 50 KB animation
@@ -30,9 +30,22 @@ import { useEffect } from "react";
  * otherwise, so the overlay leaves the layout and the accessibility tree
  * while React keeps the node it thinks it has.
  */
-// The count is the part anyone actually watches, so the extra time goes here
-// rather than into the settle, which would only make the name feel sluggish.
-const COUNT_MS = 3400;
+/**
+ * The countdown, and it is three real seconds.
+ *
+ * The number on screen is a count of seconds, so it has to be told in them: at
+ * 3400 the first two numbers would hold for a second and the last one for a
+ * second and a bit, which is the kind of wrong nobody points at and everybody
+ * feels. One second each, and T-0 is the release.
+ *
+ * It replaced a 000→100 progress count, which was never progress — nothing was
+ * being measured, and by the time it read 40 the page underneath had been ready
+ * for a while. A countdown says the same thing about time passing without
+ * claiming to be a measurement of anything.
+ */
+const COUNT_MS = 3000;
+/** Numbers in the count. T-3, T-2, T-1, and then it has gone. */
+const COUNT_FROM = COUNT_MS / 1000;
 const FADE_MS = 420;
 const SETTLE_MS = 900;
 const STAGGER_MS = 35;
@@ -208,18 +221,29 @@ export function PreloaderRunner() {
 
       if (awayAt === 0) {
         const t = Math.min(1, (now - started) / COUNT_MS);
-        // power1.inOut, the same curve GSAP would have used.
-        const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-        const count = Math.round(eased * 100);
-        // A hundred numbers over three and a half seconds is a change every
-        // third frame at 60Hz and every ninth at 180. Writing it anyway
-        // relaid out a display-sized run of mono digits on every one of the
-        // frames in between, for a string that had not changed.
+
+        /*
+         * Seconds left, counted the way a countdown is: `ceil`, so each number
+         * owns the whole second it is naming rather than the instant it starts
+         * at. T-3 is up for the first second, T-1 for the last, and the frame
+         * that reaches zero is the release.
+         *
+         * Not eased. The engine ramp below is, because thrust builds; a clock
+         * does not, and a countdown that slowed down in the middle would be a
+         * countdown of something other than time.
+         */
+        const left = Math.max(0, COUNT_MS - (now - started));
+        const count = Math.min(COUNT_FROM, Math.ceil(left / 1000));
+        // Three numbers over three seconds is one change a second, against 180
+        // frames. Writing it anyway relaid out a display-sized run of mono
+        // glyphs on all 179 of the others, for a string that had not changed.
         if (counter && count !== shown) {
           shown = count;
-          counter.textContent = String(count).padStart(3, "0");
+          counter.textContent = `T-${count}`;
         }
-        level = eased;
+
+        // power1.inOut, the same curve GSAP would have used.
+        level = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
         if (t >= 1) {
           awayAt = now;
           launch();
@@ -249,7 +273,7 @@ export function PreloaderRunner() {
     frame = requestAnimationFrame(tick);
 
     const skip = () => {
-      if (counter) counter.textContent = "100";
+      if (counter) counter.textContent = "T-0";
       finish();
     };
 
@@ -275,12 +299,16 @@ export function PreloaderOverlay({ loading }: { loading: string }) {
       className="bg-void fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3"
     >
       <PreloaderCraft />
+      {/* Server-rendered at the number the count starts on, so the first paint
+          is already the first beat of the sequence rather than a value that is
+          corrected a frame later. Three glyphs here and at every step after,
+          in a mono face, so the line never changes width. */}
       <p
         data-preloader-count
         data-numeric
         className="text-section text-signal font-mono leading-none"
       >
-        000
+        T-{COUNT_FROM}
       </p>
       <p className="label-mono text-center">{loading}</p>
     </div>

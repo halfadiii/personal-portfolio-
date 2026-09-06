@@ -892,11 +892,21 @@ One orchestrated moment on load, then motion only in response to action.
 
 ### The preloader
 
-A mono counter runs 000 to 100 while fonts and the constellation settle; on
-completion the counter collapses, the fragments arrive at their slots, and the
-name expands along Archivo's width axis. About 4.3 seconds, skippable by any key
-or click, once per session. A rocket sits on the pad and launches part-way
-through.
+A rocket sits on the pad under a launch countdown: **T-3, T-2, T-1**, one real
+second each, and at **T-0** it lights and goes. The fragments then arrive at
+their slots and the name expands along Archivo's width axis. About 3.9 seconds
+to the curtain, skippable by any key or click, once per session.
+
+The count is three whole seconds (`COUNT_MS = 3000`) because the number on
+screen is a count of *seconds* and has to be told in them; the displayed figure
+is `ceil(remaining / 1000)`, so each number owns the second it names. It is
+deliberately **not** eased, unlike the engine ramp underneath it, which is: a
+clock does not accelerate.
+
+It replaced a 000 to 100 progress count, which was never progress. Nothing was
+being measured, and by the time it read 40 the page underneath had been ready
+for a while. A countdown says the same thing about time passing without
+claiming to be a measurement of anything.
 
 It is deliberately written with `requestAnimationFrame` and CSS transitions
 rather than GSAP: it runs inside the load window, and pulling in a 50 KB
