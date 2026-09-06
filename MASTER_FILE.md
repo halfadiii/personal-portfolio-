@@ -1397,6 +1397,11 @@ work section."
 
 **`25f0630` Make the shortfall mark show its number.** See section 18.
 
+**`349d0de` Write the master file.** This document.
+
+**Land the craft on the planet on a phone, and on the first go.** The stale pad
+and the world-space clearance, both in section 18.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -1458,6 +1463,38 @@ rest of the sequence.
 **The rocket never landed.** Park height fixed for the largest planet, so it
 floated 0.24 units over the six small ones, and measured to the plume rather
 than to the nozzle. Two independent errors in one constant.
+
+**The rocket's first landing was on the wrong ring.** Reported as "on a phone,
+the very first time, it doesn't land on the planet but slightly out of it", and
+it was two independent faults stacked, again.
+
+The first: `HeroScene` opens with `frameRing(16 / 9)` and corrects to the real
+viewport a frame later. A portrait window draws the ring in from 3.45 to 3.05.
+The planets take their position from that prop on every render and move; the
+craft's pad is *solved once*, when a leg begins, and the first solve happens on
+that first frame. So the craft spent its first landing four tenths of a unit
+outboard of the planet it was supposedly standing on — and only the first,
+because the next transfer re-solved it against the ring that was actually
+there. Fixed by re-deriving the pad every frame while parked.
+
+The second: `TAIL_CLEAR` is a *world-space* clearance, and the craft parks on
+the pole, which is the one place on a sphere a camera looking down at it cannot
+show you. In portrait the camera climbs to 4.5 to frame the ring, and only
+0.658 of an offset along that pole survives the projection. The craft's centre
+reached 0.816 of the planet's drawn radius: inside the outline. A wide screen
+was never right either, only close enough at 1.010. Fixed by solving the
+clearance in the picture rather than in the world — `standoff()` puts the foot
+on the drawn limb at any camera angle, and reduces to the old constant exactly
+when the view is edge-on.
+
+Worth noting how this one was found, because three reasonable-sounding causes
+were wrong first. Camera elevation was computed and ruled out (foreshortening
+differs by only 6% between the two framings — true, and not the whole story).
+The lit plume was read as "still under power" when the craft was parked and
+that was the hull. And the disc's centre was eyeballed off a mostly-unlit
+sphere, which put the offset sideways when it was radial. Only publishing the
+scene's own numbers to `window` settled it: `pos.z` 3.45 against `planet.z`
+3.05, in one line, after an hour of inference.
 
 **The rocket's landing turned a visible corner.** The outward bulge was
 `sin(π · min(1, c/0.68))`, whose slope where it clamps is `-π/0.68`, not zero.

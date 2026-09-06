@@ -63,8 +63,68 @@ const WEAVE_VERTICAL = 0.24;
  * diameter. And 0.44 was itself the flame's reach rather than the hull's, so
  * even on the large one it hovered another 0.068. Per planet, and to the
  * nozzle, it stands on the ground.
+ *
+ * It is the clearance *in the picture*, though, not in the world — see
+ * `standoff` below for why those stop being the same thing as soon as the
+ * camera climbs.
  */
 const TAIL_CLEAR = 0.072;
+
+/**
+ * The least of the pole that a view is allowed to keep.
+ *
+ * A guard, not a tuning knob. `standoff` divides by this, so a camera looking
+ * exactly down a planet's axis would otherwise ask for an infinite one. No
+ * framing on this site comes near it: the shallowest is 0.66.
+ */
+const POLE_MIN = 0.35;
+
+/**
+ * How high the craft's centre rides over a planet of radius `size`, given how
+ * much of the pole the camera can still see.
+ *
+ * The craft parks on the planet's north pole, and a pole is the one place on a
+ * sphere that a camera looking down at it cannot show you. `pole` is how much
+ * of an offset along that axis survives the projection: 1 with the camera level
+ * with the orbit plane, 0 with it straight overhead. Everything on this ring is
+ * seen from above, so it is never 1 — and the clearance has to be solved in the
+ * picture rather than in the world, or the craft is drawn inside the disc it is
+ * standing on.
+ *
+ * Solved so the *foot* lands on the *drawn* edge: the nozzle sits `size / pole`
+ * out, which projects to exactly `size`, which is the silhouette. Add the
+ * nozzle back and that is where the centre goes.
+ *
+ * At `pole = 1` this returns `size + TAIL_CLEAR` — the old constant, exactly —
+ * so the edge-on case is unchanged and the world-space landing it describes is
+ * still what a level camera would see. Everything else is the same landing,
+ * held at the same apparent height as the view tips over.
+ *
+ * How far the craft's centre reaches, as a fraction of the planet's drawn
+ * radius. Under 1 is a craft inside the outline it is supposed to be standing
+ * on, which is what "it doesn't land on the planet" was:
+ *
+ *                        pole   before   after
+ *   1600x900  featured   0.814   1.010   1.195
+ *   1600x900  the six    0.814   1.107   1.293
+ *    786x1764 featured   0.741   0.919   1.178   <- inside the disc
+ *    786x1764 the six    0.741   1.008   1.267
+ *     393x700 featured   0.658   0.816   1.158   <- and worse on a real phone
+ *     393x700 the six    0.658   0.895   1.237
+ *
+ * The foot lands at exactly 1.000 in all six, which is the whole design: it is
+ * one number now instead of six, and it is the number that means "on the edge".
+ *
+ * The featured planet fails first because it is the largest, and it is the one
+ * at the front on load — so the worst case on the site was the first thing a
+ * phone visitor saw. A wide screen was never right either, only close enough:
+ * 1.010 is the craft's centre a hundredth of a radius past the limb, with its
+ * feet already a fifth of the way inside.
+ */
+function standoff(size: number, pole: number) {
+  return size / Math.max(POLE_MIN, pole) + TAIL_CLEAR;
+}
+
 /** Where the coast hands over to the landing burn. */
 const TOUCH_FROM = 0.62;
 /** Length of that burn, as a fraction of the transfer. */
@@ -337,11 +397,19 @@ export function Rocket({
     return () => watch.disconnect();
   }, []);
 
+  /**
+   * How much of the pole survives the projection: 1 when the camera is level
+   * with the orbit plane, 0 when it is straight overhead. Written each frame,
+   * read by `parkAt`.
+   */
+  const pole = useRef(1);
+
   /** How high the craft's centre rides over planet `i`. */
   const parkAt = useMemo(() => {
-    return (i: number) =>
-      (sizes[((i % sizes.length) + sizes.length) % sizes.length] ?? 0.3) +
-      TAIL_CLEAR;
+    return (i: number) => {
+      const size = sizes[((i % sizes.length) + sizes.length) % sizes.length] ?? 0.3;
+      return standoff(size, pole.current);
+    };
   }, [sizes]);
 
   const scratch = useMemo(
@@ -353,6 +421,8 @@ export function Rocket({
       up: new THREE.Vector3(0, 1, 0),
       aim: new THREE.Quaternion(),
       nozzle: new THREE.Vector3(),
+      eye: new THREE.Vector3(),
+      pad: new THREE.Vector3(),
     }),
     [],
   );
@@ -489,13 +559,38 @@ export function Rocket({
     [path, exhaust],
   );
 
-  useFrame((_, delta) => {
+  useFrame((rendered, delta) => {
     const node = craft.current;
     if (!node) return;
 
     const state = flight.current;
     const arrival_ = arrival.current;
     const wanted = frontRef.current ?? 0;
+
+    /*
+     * How much of the pole the camera can see, at the pad it is heading for.
+     *
+     * Worked out in the ring's own frame rather than in world space, so `y` is
+     * the orbit plane's normal by construction and the whole thing is one dot
+     * product. The transform is a rotation and a translation, so the angle it
+     * measures is the same angle either side of it.
+     *
+     * Aimed at the destination planet's centre rather than at the craft: it is
+     * that planet's outline the foot has to land on, and reading it off the
+     * craft would make the number move as the craft flew.
+     */
+    const frame = node.parent;
+    if (frame) {
+      frame.updateWorldMatrix(true, false);
+      scratch.eye.copy(rendered.camera.position);
+      frame.worldToLocal(scratch.eye);
+      const aim = wanted * step;
+      scratch.pad
+        .set(Math.sin(aim) * radius, 0, Math.cos(aim) * radius)
+        .sub(scratch.eye)
+        .normalize();
+      pole.current = Math.sqrt(Math.max(0, 1 - scratch.pad.y * scratch.pad.y));
+    }
 
     if (state.target === -1) {
       // First frame: start parked over whatever is already at the front.
@@ -532,6 +627,36 @@ export function Rocket({
       state.target = wanted;
       state.t = 0;
       solveBurn();
+    }
+
+    /*
+     * Parked, on whatever ring exists now.
+     *
+     * The pad is solved once, when a leg begins, and then held — which is right
+     * for a craft in flight and wrong for one that has already landed, because
+     * the ring it landed on can be re-measured underneath it. `HeroScene` opens
+     * with `frameRing(16 / 9)` and corrects to the real viewport a frame later,
+     * and a portrait viewport draws the ring in at 3.05 against that guess of
+     * 3.45. The planets take their position from the prop every render and move.
+     * A pad solved on the first frame did not, so the craft spent its first
+     * landing four tenths of a unit outboard of the planet it was standing on:
+     * past the limb, over open space, and only ever on the *first* landing,
+     * because the next transfer re-solved it against the ring that was actually
+     * there. Which is exactly how it was reported — the very first one, on a
+     * phone, and never again.
+     *
+     * Re-derived rather than remembered. `to` is the angle it landed at, and
+     * everything else about the pad follows from the geometry as it is now.
+     */
+    if (!arriving && state.t >= 1) {
+      const to = state.fromAngle + state.sweep;
+      state.parkTo = parkAt(state.target);
+      state.parkFrom = state.parkTo;
+      state.pad.set(
+        Math.sin(to) * radius,
+        state.parkTo,
+        Math.cos(to) * radius,
+      );
     }
 
     if (arriving) {
