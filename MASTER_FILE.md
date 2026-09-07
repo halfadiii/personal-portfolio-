@@ -13,7 +13,7 @@ what you are looking at, section 5 to find your way around the files, and
 sections 17 and 18 before you change anything, because most of the code that
 looks strange in here is code that is the way it is for a measured reason.
 
-Last updated: 2026-09-06, at commit `eb7396b`.
+Last updated: 2026-09-07, at commit `003655f`.
 
 ---
 
@@ -347,6 +347,14 @@ was typed in by hand.
 The whole NYC network in 3D from the MTA's static GTFS feed (29 routes, 496
 stations, 46 KB of JSON), then one arrival being inferred on the L line. Trains
 are simulated; see section 19.
+
+The second half is a **strip diagram** (`LineStrip.tsx`), not a 3D scene. A rail
+with every station at its true distance along the line, trains at their real
+positions, and above the followed train a *beam*: one stem per stop the feed is
+predicting, each carrying its countdown. The beam is driven off the last
+published poll rather than off the truth, so the trains move every frame and the
+stems jump every thirty seconds — two clocks at different rates, which is the
+pipeline's whole problem in one picture. It replaced a 3D view; see section 18.
 
 ### `/demo/print-inspection`
 
@@ -746,7 +754,7 @@ on it moves about a seventh of a per cent in that time.
 The surface is baked once into a cube map and rotated after that, so a frame
 costs one texture fetch.
 
-### `SubwayMap` and `SubwayScene`
+### `SubwayMap`
 
 The whole network in 3D from real GTFS shapes, stops and agency colours.
 Everything that repeats is instanced: 496 stations and a few hundred trains
@@ -754,8 +762,11 @@ would be hundreds of draw calls as separate meshes; as two `InstancedMesh`
 objects they are two. Train positions are read from a ref every frame, so React
 never re-renders while they move.
 
-`SubwayScene` is the single-line version: the L, its stations, and the trains
-running it. Train positions come from the simulation, never from the scene.
+There used to be a `SubwayScene` alongside it — the single-line version, the L
+in 3D. It is deleted. What replaced it is `viz/LineStrip.tsx`, which is SVG:
+positions are still written straight to the DOM in a frame loop so React never
+re-renders while trains move, but it takes three.js off half the route, works at
+any width, scrolls inside its own box on a phone, and carries real text.
 
 ### `PrintLine`
 
@@ -1254,7 +1265,7 @@ replaced.
 
 ## 17. Complete change history
 
-Thirty-two commits, 2026-09-01 to 2026-09-06. In order.
+Thirty-five commits, 2026-09-01 to 2026-09-07. In order.
 
 ### Phase 1: the build (2026-09-01 to 09-04)
 
@@ -1443,6 +1454,21 @@ stale pad and the world-space clearance, both in section 18. Reported a second
 time after `dbdb507` had already been called a fix for it, which is the useful
 part: `dbdb507` fixed a real fault and left two others standing behind it.
 
+**`a1322ad` Bring the master file up to the landing fix.** Documentation only.
+
+**`0a5cb4b` Count the loading screen down to a launch, not up to a hundred.**
+T-3, T-2, T-1, and at T-0 the craft leaves the pad — the same frame that tells
+the one in the orbit below to begin its descent. Three whole seconds, because
+the number on screen is a count of seconds and has to be told in them, and
+`ceil(remaining / 1000)` so each number owns the second it names. Not eased,
+unlike the engine ramp it used to share a curve with: thrust builds, a clock
+does not. It replaced a 000→100 progress count that was never progress —
+nothing was being measured, and by the time it read 40 the page had been ready
+for a while.
+
+**`003655f` Draw the arrival as an instrument, not a scene.** The strip diagram,
+and the repo link. See section 18.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -1573,6 +1599,29 @@ vocabulary as the `level` mark: an outlined track for the target, filled to wher
 the cohort actually got, a solid tick where it stops, a dashed marker at the
 target. The gap between them is the number, and a fifth of a track left empty is
 a fifth you can see.
+
+**The subway demo's 3D scene was decoration wearing the clothes of a
+visualisation.** Reported bluntly: "the visuals are very awful." They were. It
+drew every train as a box in perspective along a curved route, under a heading
+that says *now watch one arrival happen* — and the two things that section
+exists to show were the two things perspective could not show. Where a train
+sits relative to the *stations* was foreshortened away, so eleven trains read as
+thirty crates on a squiggle. And what the feed currently believes, which is the
+entire subject, was not drawn at all. It took a full screen of height to say
+nothing.
+
+The replacement is an SVG strip diagram: true station spacing, trains at real
+positions, and a beam of stems above the followed train carrying the countdowns
+the feed is currently publishing. The lesson generalises past this one page. A
+scene renders the *world*; an instrument renders the *claim*. This section's
+claim was never "there are trains on a line" — it was "the feed's belief and the
+train's position are two different things moving at two different rates", and
+only one of those two drawings can show that.
+
+Worth noting the second-order gain: it also made the page lighter, work at every
+width, and print. When a visual is hard to make legible, it is often because it
+is drawing the wrong thing, and the weight is the symptom rather than the
+problem.
 
 **The trail's pulled-out figures.** "120s", "18 / 2,315", "0 of 5" quoted numbers
 the sentence beside them had already earned, which made a section about *how* the
