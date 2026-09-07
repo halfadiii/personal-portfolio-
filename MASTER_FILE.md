@@ -13,7 +13,7 @@ what you are looking at, section 5 to find your way around the files, and
 sections 17 and 18 before you change anything, because most of the code that
 looks strange in here is code that is the way it is for a measured reason.
 
-Last updated: 2026-09-07, at commit `8784442`.
+Last updated: 2026-09-07, at commit `f418e67`.
 
 ---
 
@@ -356,8 +356,14 @@ answers almost every request, so the MTA is asked about three times a minute
 whether one person is watching or a thousand.
 
 The browser then runs the same three inference rules the warehouse runs, on the
-same raw material. The trains on the 3D map above are *still simulated* across
-all 26 routes; only the L demo is live.
+same raw material.
+
+**The 3D map is live too.** `LiveFleet` in `src/lib/subway-fleet-live.ts`
+subclasses the original `Fleet`, reuses its station-to-arc indexing, and places
+about 490 real trains — roughly 99% of the trips in the feed; the rest are
+branch and shuttle patterns the map does not draw. Both halves share one
+endpoint and one edge cache, so having them on the same page costs the MTA
+nothing extra.
 
 The second half is a **strip diagram** (`LineStrip.tsx`), not a 3D scene. A rail
 with every station at its true distance along the line, trains at their real
@@ -1276,7 +1282,7 @@ replaced.
 
 ## 17. Complete change history
 
-Thirty-seven commits, 2026-09-01 to 2026-09-07. In order.
+Thirty-eight commits, 2026-09-01 to 2026-09-07. In order.
 
 ### Phase 1: the build (2026-09-01 to 09-04)
 
@@ -1491,6 +1497,20 @@ fleet and a third of a fleet is a pattern rather than a signal.
 
 **`8784442` Make the edge actually cache the feed proxy.** The header said
 `s-maxage=20`; the deployed response said `max-age=0`. See section 18.
+
+**`f418e67` Put the whole network on the live feeds too.** The map's trains were
+simulated *and* stepped at three times real time on an invented 30 km/h, which
+is why they read as a hurried toy. `LiveFleet` has no speed at all: a train sits
+where its own predicted arrival puts it between two platforms, so it crosses
+each gap in exactly the time the MTA says it will. Which way it runs along a
+shape is read off its own predictions, because the feed's N/S does not map onto
+the direction a polyline was drawn in. ~99% of trips placed.
+
+Found by watching rather than reading: the geometry and the first snapshot are
+independent fetches and either can win, so a snapshot arriving first was dropped
+and the map sat empty for thirty seconds — intermittently. It presented as
+"0 trains" beside a caption reporting 493 placed, and the two readings
+disagreeing is what gave it away.
 
 ---
 
@@ -1726,12 +1746,11 @@ the only way to know that was `curl -I` against the deployed site. Local
 
 ### Technical, and fine as they are
 
-7. **The 3D network map's trains are still simulated**, across all 26 routes.
-   The L arrival demo below it is live, through `/api/subway/live`. Pointing the
-   map at the other seven feeds is the same change repeated, seven times, and
-   the caption says exactly that.
+7. **Both halves of `/demo/subway` are live**, through `/api/subway/live`: the
+   3D network map places ~490 real trains, and the strip runs the inference on
+   the L. Nothing on that page is simulated any more.
 
-   Two consequences of the live half worth knowing. The page now depends on the
+   Two consequences of going live worth knowing. The page now depends on the
    MTA being up — it degrades to a stated message rather than breaking, but it
    is a real external dependency where there was none. And the demo's figures
    accumulate only while a visitor has the page open, so a headway at one
