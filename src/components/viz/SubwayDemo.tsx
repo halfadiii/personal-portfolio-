@@ -95,7 +95,10 @@ export function SubwayDemo() {
 
   const poll = useCallback(async () => {
     try {
-      const response = await fetch("/api/subway/live", { cache: "no-store" });
+      // No cache directive on purpose. `no-store` here would make the browser
+      // send `cache-control: no-cache`, walk straight past the edge cache the
+      // route depends on, and put every visitor's poll on the MTA's doorstep.
+      const response = await fetch("/api/subway/live");
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as {
           error?: string;

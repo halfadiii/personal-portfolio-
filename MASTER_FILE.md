@@ -13,7 +13,7 @@ what you are looking at, section 5 to find your way around the files, and
 sections 17 and 18 before you change anything, because most of the code that
 looks strange in here is code that is the way it is for a measured reason.
 
-Last updated: 2026-09-07, at commit `003655f`.
+Last updated: 2026-09-07, at commit `488ab58`.
 
 ---
 
@@ -345,8 +345,19 @@ was typed in by hand.
 ### `/demo/subway`
 
 The whole NYC network in 3D from the MTA's static GTFS feed (29 routes, 496
-stations, 46 KB of JSON), then one arrival being inferred on the L line. Trains
-are simulated; see section 19.
+stations, 46 KB of JSON), then one arrival being inferred on the L line —
+**live, from the MTA's own feed, polled every thirty seconds.**
+
+The realtime feeds are protobuf served without CORS headers, so a browser
+cannot read them; `src/app/api/subway/live/route.ts` is the proxy that makes it
+possible. It fetches, decodes, and returns about 6 KB of JSON where 30 KB of
+protobuf came in. Its `s-maxage=20` cache header is load-bearing: the edge
+answers almost every request, so the MTA is asked about three times a minute
+whether one person is watching or a thousand.
+
+The browser then runs the same three inference rules the warehouse runs, on the
+same raw material. The trains on the 3D map above are *still simulated* across
+all 26 routes; only the L demo is live.
 
 The second half is a **strip diagram** (`LineStrip.tsx`), not a 3D scene. A rail
 with every station at its true distance along the line, trains at their real
@@ -1265,7 +1276,7 @@ replaced.
 
 ## 17. Complete change history
 
-Thirty-five commits, 2026-09-01 to 2026-09-07. In order.
+Thirty-six commits, 2026-09-01 to 2026-09-07. In order.
 
 ### Phase 1: the build (2026-09-01 to 09-04)
 
@@ -1468,6 +1479,15 @@ for a while.
 
 **`003655f` Draw the arrival as an instrument, not a scene.** The strip diagram,
 and the repo link. See section 18.
+
+**`488ab58` Run the arrival demo on the live MTA feed.** The proxy, and the end
+of the simulation. Three defects found by looking at real output rather than at
+the code: the vehicle status enum arriving as `1` instead of `STOPPED_AT`,
+which would have placed every stationary train by interpolation; a `<p>` inside
+a `<dl>`, which axe caught; and a train that was both followed and late losing
+its white fill to the orange rule. Also: the late threshold was *measured* off
+the feed rather than picked, because sixty seconds marked a third of the L's
+fleet and a third of a fleet is a pattern rather than a signal.
 
 ---
 
@@ -1682,10 +1702,17 @@ his; the six in the morning was not.
 
 ### Technical, and fine as they are
 
-7. **The subway trains are simulated.** The MTA realtime feeds send protobuf with
-   no CORS headers, so a browser cannot read them directly; that needs a small
-   proxy. `TrainSource` in `src/lib/subway-map.ts` is the seam where one would
-   attach. **The page says this plainly.**
+7. **The 3D network map's trains are still simulated**, across all 26 routes.
+   The L arrival demo below it is live, through `/api/subway/live`. Pointing the
+   map at the other seven feeds is the same change repeated, seven times, and
+   the caption says exactly that.
+
+   Two consequences of the live half worth knowing. The page now depends on the
+   MTA being up — it degrades to a stated message rather than breaking, but it
+   is a real external dependency where there was none. And the demo's figures
+   accumulate only while a visitor has the page open, so a headway at one
+   platform can take a few minutes to appear. That is honest rather than
+   ideal; the alternative is server-side history, which needs a store.
 8. **The rate limit is per-instance in-process memory.** Enough for a
    single-origin portfolio. A multi-region deployment should swap the map for a
    shared store (Upstash, Vercel KV); the call signature was designed not to

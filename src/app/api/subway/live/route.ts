@@ -6,8 +6,22 @@ export const runtime = "nodejs";
 // The fetch below gives up at 8s; this leaves headroom for the decode without
 // letting a hung upstream hold a function open.
 export const maxDuration = 15;
-// Never prerendered: the whole value of this route is that it is answered now.
-export const dynamic = "force-dynamic";
+/*
+ * Regenerated at most every twenty seconds, and cached in between.
+ *
+ * This started as `dynamic = "force-dynamic"` with an explicit
+ * `s-maxage=20` header, and that quietly did the opposite of what it said:
+ * force-dynamic makes Next replace the response's cache-control with
+ * `max-age=0`, so the header was stripped, every edge request was a MISS, and
+ * every visitor's poll reached the MTA directly. Verified on the deployed
+ * site, not assumed — `x-vercel-cache: MISS` on consecutive requests is what
+ * gave it away.
+ *
+ * `revalidate` is the mechanism that actually holds. It also stops the other
+ * failure: with no dynamic API in the handler, Next would otherwise be free to
+ * evaluate this at build time and serve one frozen snapshot forever.
+ */
+export const revalidate = 20;
 
 /**
  * One poll of the MTA's L feed, decoded, on the server.
@@ -24,19 +38,14 @@ export const dynamic = "force-dynamic";
  * amount of JSON it actually needs. About 30 KB of protobuf becomes about 6 KB
  * of JSON, and the client never learns what a protobuf is.
  *
- * ## The cache header is doing real work
+ * ## The caching is doing real work
  *
- * `s-maxage=20` means Vercel's edge answers almost every request from cache and
- * the MTA is asked at most about three times a minute — the same three times
- * whether one person is watching or a thousand. That is the difference between
- * a demo and a nuisance: a public feed does not owe anyone unlimited requests,
- * and a page that hammers it on every visitor is one that deserves to be
- * blocked.
- *
- * `stale-while-revalidate` then covers the MTA having a bad moment. A visitor
- * gets the last good snapshot instantly while a fresh one is fetched behind
- * them, which matters because this feed does occasionally take several seconds
- * to answer.
+ * A twenty-second revalidation window means the edge answers almost every
+ * request and the MTA is asked about three times a minute — the same three
+ * times whether one person is watching or a thousand. That is the difference
+ * between a demo and a nuisance: a public feed does not owe anyone unlimited
+ * requests, and a page that hammers it on every visitor is one that deserves
+ * to be blocked. It also absorbs the feed's slow moments, which are real.
  *
  * ## What is returned, and what is deliberately not
  *
@@ -125,9 +134,9 @@ export async function GET() {
   try {
     const response = await fetch(FEED, {
       signal: controller.signal,
-      // Next would otherwise cache this fetch and serve the same snapshot for
-      // as long as the route lives, which is the one thing it must not do.
-      cache: "no-store",
+      // Matches the route's own window. `no-store` here would force the whole
+      // route dynamic again and undo the caching above.
+      next: { revalidate: 20 },
       headers: { "user-agent": "adityaaryan.in subway demo" },
     });
     if (!response.ok) {
@@ -202,12 +211,7 @@ export async function GET() {
       trains,
     };
 
-    return NextResponse.json(payload, {
-      headers: {
-        "cache-control":
-          "public, s-maxage=20, stale-while-revalidate=40, max-age=0",
-      },
-    });
+    return NextResponse.json(payload);
   } catch (cause) {
     const aborted = cause instanceof Error && cause.name === "AbortError";
     return NextResponse.json(
