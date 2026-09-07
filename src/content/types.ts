@@ -31,6 +31,13 @@ export type Project = {
   featured?: boolean;
   /** A live, in-browser version of the project, if one exists. */
   live?: { href: string; label: string };
+  /**
+   * Where the code is, if it is public. Rendered as a secondary link beside
+   * the live demo rather than as a button: a recruiter who wants to read
+   * source will go looking for it, and one who does not should not have to
+   * step over it.
+   */
+  repo?: string;
 };
 
 export type SkillGroup = {

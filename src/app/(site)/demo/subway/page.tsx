@@ -79,6 +79,10 @@ export default function SubwayDemoPage() {
               body: "Each one accelerates out of a platform, runs to the next, and dwells there for twenty-odd seconds. The simulation knows exactly where every train is at every instant — which is the one thing production can never know.",
             },
             {
+              title: "The trains move continuously; the feed does not",
+              body: "On the strip diagram, trains slide along the rail every frame because they are physical objects. The stems above the followed train — one per stop it is predicting, each with its countdown — hold still and then jump all at once, because a belief is not continuous. It is a snapshot that is right when it is taken and goes stale until the next one lands. Those two rates running side by side are this pipeline's entire problem.",
+            },
+            {
               title: `The feed is generated every ${POLL_SECONDS} seconds`,
               body: "For each train it publishes predicted arrivals for its next six stops, with error that grows the further ahead the guess is. That is why the numbers in the table visibly converge as a train closes on a platform.",
             },

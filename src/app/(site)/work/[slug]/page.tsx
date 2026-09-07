@@ -48,7 +48,9 @@ export default async function CaseStudyPage({
   const study = await getCaseStudy(slug);
   if (!study) notFound();
 
-  const live = projectBySlug(slug)?.live;
+  const project = projectBySlug(slug);
+  const live = project?.live;
+  const repo = project?.repo;
   const all = await getAllCaseStudies();
   const position = all.findIndex((item) => item.meta.slug === slug);
   const previous = position > 0 ? all[position - 1] : null;
@@ -74,8 +76,9 @@ export default async function CaseStudyPage({
           <p className="measure text-lead text-steel">{study.meta.hook}</p>
           <p className="label-mono">{study.meta.stack.join(" · ")}</p>
 
-          {live ? (
-            <p>
+          {live || repo ? (
+            <p className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              {live ? (
               <Link
                 href={live.href}
                 className="label-mono border-signal text-signal ease-brief hover:bg-signal hover:text-void inline-flex items-center gap-3 border px-4 py-3 transition-colors duration-[var(--dur-ui)]"
@@ -93,6 +96,16 @@ export default async function CaseStudyPage({
                   <path d="M0 5h14M10 1l4 4-4 4" />
                 </svg>
               </Link>
+              ) : null}
+              {repo ? (
+                <a
+                  href={repo}
+                  rel="noreferrer"
+                  className="label-mono text-steel hover:text-signal ease-brief underline-offset-4 transition-colors duration-[var(--dur-ui)] hover:underline"
+                >
+                  Read the code on GitHub →
+                </a>
+              ) : null}
             </p>
           ) : null}
         </header>

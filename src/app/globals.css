@@ -866,3 +866,189 @@
     cursor: auto;
   }
 }
+
+/* --------------------------------------------------------------------------
+   The L strip diagram (§6, /demo/subway).
+
+   Everything here is monochrome except one thing: a train more than a minute
+   down is drawn hollow in the signage orange. That is the site's rule kept
+   rather than bent — bunching is what excess wait measures, so lateness is
+   data, and it is the only appearance on the diagram that is not position.
+   -------------------------------------------------------------------------- */
+.strip {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+.strip-rail {
+  stroke: var(--steel);
+  stroke-width: 1.25;
+}
+
+.strip-tick {
+  stroke: var(--hairline);
+  stroke-width: 1;
+}
+
+.strip-dot {
+  fill: var(--void);
+  stroke: var(--steel);
+  stroke-width: 1.25;
+}
+
+.strip-name {
+  fill: var(--steel);
+  font-size: 8.5px;
+  letter-spacing: 0.02em;
+}
+
+/* The stretch of line the current predictions reach over. Very low, because it
+   is context for the stems rather than a mark of its own. */
+.strip-reach {
+  stroke: var(--signal);
+  stroke-width: 7;
+  opacity: 0.09;
+  stroke-linecap: round;
+}
+
+.strip-train {
+  fill: var(--steel);
+}
+
+.strip-train:not([data-watched="off"]) {
+  fill: var(--signal);
+  /* The followed train is the subject; give it a little more of the rail. */
+  transform: scaleY(1.35);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.strip-train:not([data-late="off"]) {
+  fill: none;
+  stroke: var(--line-orange-on-void);
+  stroke-width: 1.5;
+}
+
+.strip-stem line {
+  stroke: var(--hairline);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.strip-stem text {
+  fill: var(--steel);
+  font-size: 9px;
+}
+
+/* The nearest prediction: the one about to resolve into an arrival. */
+.strip-stem:not([data-next="off"]) line {
+  stroke: var(--signal);
+  stroke-dasharray: none;
+}
+
+.strip-stem:not([data-next="off"]) text {
+  fill: var(--signal);
+}
+
+.strip-end,
+.strip-readout {
+  fill: var(--steel);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.strip-readout {
+  fill: var(--signal);
+}
+
+/*
+   A platform being reached. The tick is struck once, briefly — this is the
+   event the entire pipeline exists to catch, and it is over in an instant in
+   the data too.
+*/
+[data-struck] .strip-tick {
+  animation: strip-strike 1.2s var(--ease);
+}
+
+[data-struck] .strip-dot {
+  animation: strip-strike-dot 1.2s var(--ease);
+}
+
+@keyframes strip-strike {
+  0% {
+    stroke: var(--signal);
+    stroke-width: 2.5;
+  }
+  100% {
+    stroke: var(--hairline);
+    stroke-width: 1;
+  }
+}
+
+@keyframes strip-strike-dot {
+  0% {
+    fill: var(--signal);
+    r: 5;
+  }
+  100% {
+    fill: var(--void);
+    r: 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-struck] .strip-tick,
+  [data-struck] .strip-dot {
+    animation: none;
+  }
+}
+
+/* Legend swatches. */
+.strip-key {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.5rem;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+  border-radius: 1px;
+}
+
+.strip-key--train {
+  background: var(--steel);
+}
+
+.strip-key--watched {
+  background: var(--signal);
+}
+
+.strip-key--late {
+  border: 1px solid var(--line-orange-on-void);
+}
+
+.strip-key--stem {
+  height: 0;
+  border-top: 1px solid var(--signal);
+}
+
+/* Hidden until the beam has a run of line to cover. */
+.strip-reach {
+  visibility: hidden;
+}
+
+.strip-reach[data-on] {
+  visibility: visible;
+}
+
+/* The platform the metrics panel is measuring. Named there, marked here. */
+[data-focus] .strip-name {
+  fill: var(--signal);
+}
+
+[data-focus] .strip-dot {
+  fill: var(--signal);
+  stroke: var(--signal);
+}
+
+[data-focus] .strip-tick {
+  stroke: var(--signal);
+}

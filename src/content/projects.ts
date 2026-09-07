@@ -17,6 +17,7 @@ export const projects: Project[] = [
       href: "/demo/subway",
       label: "Watch an arrival happen",
     },
+    repo: "https://github.com/halfadiii/nyc-subway-reliability",
     featured: true,
   },
   {

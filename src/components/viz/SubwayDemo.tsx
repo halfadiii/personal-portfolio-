@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-import type { SceneHandle } from "@/components/three/SubwayScene";
-import { useCapability } from "@/components/motion/capability";
-import { useRoom } from "@/components/motion/useRoom";
+import { LineStrip, type StripHandle } from "./LineStrip";
 import {
   L_LINE,
   POLL_SECONDS,
@@ -27,10 +24,6 @@ import { cn } from "@/lib/utils";
  * how far the inference landed from the truth. Production never gets to check
  * its own work like this; that is exactly why the method has to be defensible.
  */
-const SubwayScene = dynamic(() => import("@/components/three/SubwayScene"), {
-  ssr: false,
-});
-
 const SPEEDS = [1, 4, 12] as const;
 /** Simulated seconds per real second at 1×. Fast enough to see a poll land. */
 const BASE_RATE = 6;
@@ -46,16 +39,20 @@ type Snapshot = {
 };
 
 export function SubwayDemo() {
-  const { reducedMotion } = useCapability();
   const [focus, setFocus] = useState(11);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(4);
   const [running, setRunning] = useState(true);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-  const room = useRoom();
 
   const simRef = useRef<SubwaySim | null>(null);
-  const handleRef = useRef<SceneHandle>({ trains: [], focus, watched: null });
+  const handleRef = useRef<StripHandle>({
+    trains: [],
+    focus,
+    watched: null,
+    t: 0,
+    beam: [],
+  });
   const watchedRef = useRef<string | null>(null);
 
   // Kept out of state so the loop never restarts when they change.
@@ -103,6 +100,13 @@ export function SubwayDemo() {
       handleRef.current.trains = sim.trains;
       handleRef.current.focus = focusRef.current;
       handleRef.current.watched = watchedRef.current;
+      handleRef.current.t = sim.t;
+      // The beam is the *last published poll*, not the truth. It sits still
+      // while the train moves and jumps when a poll lands, which is the
+      // difference the diagram exists to show.
+      const latest = sim.polls[sim.polls.length - 1];
+      handleRef.current.beam =
+        (watchedRef.current && latest?.trips.get(watchedRef.current)) || [];
 
       // React only needs the panels, and only a few times a second.
       sincePublish += real;
@@ -201,17 +205,8 @@ export function SubwayDemo() {
         </p>
       ) : null}
 
-      <div className="border-hairline relative aspect-[16/10] w-full overflow-hidden border sm:aspect-[16/8]">
-        {reducedMotion === false && room ? (
-          <div aria-hidden className="absolute inset-0">
-            <SubwayScene handleRef={handleRef} />
-          </div>
-        ) : (
-          <p className="label-mono absolute inset-0 grid place-items-center p-6 text-center">
-            The moving view needs a screen with some room on it and motion you
-            have not asked to reduce. Every number below is still live.
-          </p>
-        )}
+      <div className="border-hairline w-full border p-4 sm:p-6">
+        <LineStrip handleRef={handleRef} running={running} />
       </div>
 
       <p className="label-mono">

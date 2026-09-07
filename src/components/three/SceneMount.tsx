@@ -291,6 +291,15 @@ export function SceneMount({
                       Read the case study →
                     </Link>
                   ) : null}
+                  {project.repo ? (
+                    <a
+                      href={project.repo}
+                      rel="noreferrer"
+                      className="label-mono border-hairline text-steel ease-brief hover:border-signal hover:text-signal border px-4 py-2.5 transition-colors duration-[var(--dur-ui)]"
+                    >
+                      Code →
+                    </a>
+                  ) : null}
                   <button
                     ref={backRef}
                     type="button"
