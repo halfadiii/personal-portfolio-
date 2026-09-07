@@ -13,7 +13,7 @@ what you are looking at, section 5 to find your way around the files, and
 sections 17 and 18 before you change anything, because most of the code that
 looks strange in here is code that is the way it is for a measured reason.
 
-Last updated: 2026-09-07, at commit `488ab58`.
+Last updated: 2026-09-07, at commit `8784442`.
 
 ---
 
@@ -1276,7 +1276,7 @@ replaced.
 
 ## 17. Complete change history
 
-Thirty-six commits, 2026-09-01 to 2026-09-07. In order.
+Thirty-seven commits, 2026-09-01 to 2026-09-07. In order.
 
 ### Phase 1: the build (2026-09-01 to 09-04)
 
@@ -1489,6 +1489,9 @@ its white fill to the orange rule. Also: the late threshold was *measured* off
 the feed rather than picked, because sixty seconds marked a third of the L's
 fleet and a third of a fleet is a pattern rather than a signal.
 
+**`8784442` Make the edge actually cache the feed proxy.** The header said
+`s-maxage=20`; the deployed response said `max-age=0`. See section 18.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -1650,6 +1653,27 @@ work is done read like a slide about *how well* it went.
 **Invented colour in his voice.** A draft of the trail put "six in the morning"
 and "a cup of coffee" into his mouth. The ten seconds and the coffee were already
 his; the six in the morning was not.
+
+**A cache header that was discarded in transit.** The feed proxy set
+`Cache-Control: s-maxage=20` so the edge would absorb the traffic and the MTA
+would be asked about three times a minute however many people were watching.
+The deployed response came back `max-age=0` with `x-vercel-cache: MISS` on
+every request, so every visitor's poll was landing on a public feed directly —
+the exact behaviour the header was written to prevent, shipped with a comment
+claiming it prevented it.
+
+`export const dynamic = "force-dynamic"` was the cause: Next replaces the
+response's cache-control when it is set, so an explicit header written three
+lines below it is overwritten on the way out. `export const revalidate = 20` is
+the mechanism that actually holds. The client was undoing it from the other end
+too — `fetch(url, { cache: "no-store" })` makes the browser send
+`cache-control: no-cache`, which walks straight past the edge cache.
+
+The lesson is not about Next. It is that **a header is a claim about a response
+you have not looked at.** Nothing in the source was wrong to read; the value was
+right there. It was discarded somewhere between the handler and the wire, and
+the only way to know that was `curl -I` against the deployed site. Local
+`next start` does not model the edge at all.
 
 ### The measurement lessons
 
