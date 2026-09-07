@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
-import lLine from "@/content/data/l-line.json";
 
 export const runtime = "nodejs";
 // The fetch below gives up at 8s; this leaves headroom for the decode without
@@ -56,16 +55,33 @@ export const revalidate = 20;
  * showing the answer and calling it the method.
  */
 
-const FEED = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-l";
+const BASE = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs";
+
+/**
+ * All eight of them. The MTA splits the subway by line group, so a picture of
+ * the whole system is eight fetches — run together, they cost about as long as
+ * the slowest one rather than the sum. Measured: 241ms for all eight, 443 KB
+ * of protobuf, about 500 trains.
+ */
+const FEEDS = ["", "-ace", "-bdfm", "-g", "-jz", "-nqrw", "-l", "-si"];
 const TIMEOUT_MS = 8000;
 
-/** Stop ids the L actually calls at, so a yard move cannot invent a station. */
-const KNOWN = new Set(lLine.stations.map((station) => station.id));
+/**
+ * How many predictions each train carries out of here.
+ *
+ * The map needs two — where a train is heading and the stop after it, which is
+ * what the run time is estimated from. The strip diagram needs the L's full
+ * horizon, because the beam *is* those predictions. Sending eight for all five
+ * hundred trains would quadruple the payload to draw six stems.
+ */
+const HORIZON = (route: string | null) => (route === "L" ? 8 : 2);
 
 export type LiveTrain = {
   /** The trip id, which is the only stable identity a train has for a day. */
   id: string;
-  /** `N` toward 8 Av, `S` toward Canarsie. */
+  /** Route it is running, e.g. `L`, `6`, `FS`. */
+  route: string;
+  /** The direction letter the feed puts on its stop ids. */
   direction: "N" | "S";
   /** Station id (no direction suffix) this train is at or heading for. */
   stop: string | null;
@@ -87,15 +103,23 @@ export type LivePayload = {
   generatedAt: number;
   /** When this server fetched it. Never the event time; see the MTA repo. */
   fetchedAt: number;
+  /** How many of the eight endpoints answered. Reported, not hidden. */
+  feeds: { asked: number; answered: number };
   trains: LiveTrain[];
 };
 
-/** `L03N` → `L03`, and the direction it was carrying. */
+/**
+ * `L03N` → `L03`, and the direction it was carrying.
+ *
+ * Deliberately not checked against a station list. The L's own stops are known
+ * here, but every other route's are not, and a route handler that silently
+ * dropped stops it did not recognise would be making a decision the client is
+ * better placed to make — it has the geometry, so it knows what it can draw.
+ */
 function split(stopId: string): { stop: string; direction: "N" | "S" } | null {
   const tail = stopId.slice(-1);
   if (tail !== "N" && tail !== "S") return null;
-  const stop = stopId.slice(0, -1);
-  return KNOWN.has(stop) ? { stop, direction: tail } : null;
+  return { stop: stopId.slice(0, -1), direction: tail };
 }
 
 /**
@@ -127,64 +151,97 @@ function seconds(value: unknown): number {
   return 0;
 }
 
-export async function GET() {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
+/** One feed, decoded, or null if it could not be had. Never throws. */
+async function pull(
+  suffix: string,
+  signal: AbortSignal,
+): Promise<InstanceType<
+  typeof GtfsRealtimeBindings.transit_realtime.FeedMessage
+> | null> {
   try {
-    const response = await fetch(FEED, {
-      signal: controller.signal,
+    const response = await fetch(BASE + suffix, {
+      signal,
       // Matches the route's own window. `no-store` here would force the whole
       // route dynamic again and undo the caching above.
       next: { revalidate: 20 },
       headers: { "user-agent": "adityaaryan.in subway demo" },
     });
-    if (!response.ok) {
+    if (!response.ok) return null;
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(buffer);
+  } catch {
+    // One endpoint having a bad afternoon costs that endpoint's trains, not
+    // the response. The same rule the pipeline's own poller follows.
+    return null;
+  }
+}
+
+export async function GET() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const feeds = await Promise.all(
+      FEEDS.map((suffix) => pull(suffix, controller.signal)),
+    );
+    const alive = feeds.filter((feed) => feed !== null);
+    if (!alive.length) {
       return NextResponse.json(
-        { error: `The MTA feed answered ${response.status}.` },
+        { error: "The MTA feeds could not be read." },
         { status: 502 },
       );
     }
-
-    const buffer = new Uint8Array(await response.arrayBuffer());
-    const feed =
-      GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(buffer);
 
     // Predictions come from TripUpdate; where a train *is* comes from
     // VehiclePosition. They are separate entities keyed by the same trip id,
     // so they are collected separately and joined at the end.
     const predictions = new Map<string, LiveTrain["predictions"]>();
+    const route = new Map<string, string>();
     const direction = new Map<string, "N" | "S">();
     const delay = new Map<string, number>();
-    const placed = new Map<string, { stop: string | null; status: string | null }>();
+    const placed = new Map<
+      string,
+      { stop: string | null; status: string | null }
+    >();
 
-    for (const entity of feed.entity) {
-      const update = entity.tripUpdate;
-      if (update?.trip?.tripId) {
-        const id = update.trip.tripId;
-        const ahead: LiveTrain["predictions"] = [];
-        for (const stop of update.stopTimeUpdate ?? []) {
-          const at = seconds(stop.arrival?.time);
-          const parsed = stop.stopId ? split(stop.stopId) : null;
-          if (!at || !parsed) continue;
-          direction.set(id, parsed.direction);
-          // The delay on the nearest stop is the one that describes the train.
-          if (!ahead.length && typeof stop.arrival?.delay === "number") {
-            delay.set(id, stop.arrival.delay);
+    let generatedAt = 0;
+
+    for (const feed of alive) {
+      generatedAt = Math.max(generatedAt, seconds(feed.header?.timestamp));
+
+      for (const entity of feed.entity) {
+        const update = entity.tripUpdate;
+        if (update?.trip?.tripId) {
+          const id = update.trip.tripId;
+          const on = update.trip.routeId ?? "";
+          if (on) route.set(id, on);
+          const ahead: LiveTrain["predictions"] = [];
+          for (const stop of update.stopTimeUpdate ?? []) {
+            const at = seconds(stop.arrival?.time);
+            const parsed = stop.stopId ? split(stop.stopId) : null;
+            if (!at || !parsed) continue;
+            direction.set(id, parsed.direction);
+            // The delay on the nearest stop is the one that describes the train.
+            if (!ahead.length && typeof stop.arrival?.delay === "number") {
+              delay.set(id, stop.arrival.delay);
+            }
+            ahead.push({ stop: parsed.stop, at });
           }
-          ahead.push({ stop: parsed.stop, at });
+          if (ahead.length) predictions.set(id, ahead);
         }
-        if (ahead.length) predictions.set(id, ahead);
-      }
 
-      const vehicle = entity.vehicle;
-      if (vehicle?.trip?.tripId) {
-        const parsed = vehicle.stopId ? split(vehicle.stopId) : null;
-        if (parsed) direction.set(vehicle.trip.tripId, parsed.direction);
-        placed.set(vehicle.trip.tripId, {
-          stop: parsed?.stop ?? null,
-          status: statusName(vehicle.currentStatus),
-        });
+        const vehicle = entity.vehicle;
+        if (vehicle?.trip?.tripId) {
+          const id = vehicle.trip.tripId;
+          const on = vehicle.trip.routeId ?? "";
+          if (on) route.set(id, on);
+          const parsed = vehicle.stopId ? split(vehicle.stopId) : null;
+          if (parsed) direction.set(id, parsed.direction);
+          placed.set(id, {
+            stop: parsed?.stop ?? null,
+            status: statusName(vehicle.currentStatus),
+          });
+        }
       }
     }
 
@@ -192,34 +249,32 @@ export async function GET() {
     for (const [id, ahead] of predictions) {
       const where = placed.get(id);
       const heading = direction.get(id);
-      if (!heading) continue;
+      const on = route.get(id);
+      if (!heading || !on) continue;
       trains.push({
         id,
+        route: on,
         direction: heading,
         // A trip with no VehiclePosition yet still has predictions; fall back
         // to the nearest stop it is predicting, which is where it is going.
         stop: where?.stop ?? ahead[0]?.stop ?? null,
         status: where?.status ?? null,
         delay: delay.get(id) ?? null,
-        predictions: ahead.slice(0, 8),
+        predictions: ahead.slice(0, HORIZON(on)),
       });
     }
 
     const payload: LivePayload = {
-      generatedAt: seconds(feed.header?.timestamp),
+      generatedAt,
       fetchedAt: Math.floor(Date.now() / 1000),
+      feeds: { asked: FEEDS.length, answered: alive.length },
       trains,
     };
 
     return NextResponse.json(payload);
-  } catch (cause) {
-    const aborted = cause instanceof Error && cause.name === "AbortError";
+  } catch {
     return NextResponse.json(
-      {
-        error: aborted
-          ? "The MTA feed did not answer in time."
-          : "The MTA feed could not be read.",
-      },
+      { error: "The MTA feeds could not be read." },
       { status: 504 },
     );
   } finally {

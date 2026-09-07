@@ -7,11 +7,12 @@ import { useCapability } from "@/components/motion/capability";
 import { useRoom } from "@/components/motion/useRoom";
 import { useOnScreen } from "@/components/three/useOnScreen";
 import {
-  Fleet,
   loadSubwayMap,
   readableInk,
   type SubwayMapData,
 } from "@/lib/subway-map";
+import { LiveFleet } from "@/lib/subway-fleet-live";
+import type { LivePayload } from "@/app/api/subway/live/route";
 import { cn } from "@/lib/utils";
 
 /**
@@ -44,12 +45,38 @@ export function SubwayNetwork() {
   const room = useRoom();
 
   const { ref: viewport, onScreen } = useOnScreen<HTMLDivElement>();
-  const fleetRef = useRef<Fleet | null>(null);
+  const fleetRef = useRef<LiveFleet | null>(null);
+  const [feed, setFeed] = useState<{ at: number; placed: number; of: number } | null>(null);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  /*
+    The last snapshot, held separately from the fleet that consumes it.
+
+    These two arrive independently: the network geometry is a 46 KB fetch and
+    the snapshot is another, and either can win. Handing the payload straight
+    to the fleet meant that whenever the snapshot got there first there was no
+    fleet to give it to, it was dropped, and the map sat empty for a full
+    thirty seconds until the next poll — intermittently, depending on which
+    fetch happened to be quicker. Kept here instead, and applied by whichever
+    of the two finishes last.
+  */
+  const latestRef = useRef<LivePayload | null>(null);
   const handleRef = useRef<MapHandle>({
     fleet: null,
     visible: new Set(),
     labels: true,
   });
+
+  /** Give the fleet the newest snapshot, whenever both of them exist. */
+  const applyLatest = useCallback(() => {
+    const fleet = fleetRef.current;
+    const payload = latestRef.current;
+    if (!fleet || !payload) return;
+    setFeed({
+      at: payload.generatedAt,
+      placed: fleet.accept(payload.trains),
+      of: payload.trains.length,
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,12 +97,13 @@ export function SubwayNetwork() {
           return total;
         });
 
-        const fleet = new Fleet(loaded, lengths);
-        fleet.populate();
-        // Settle the fleet so trains do not all start at a terminal.
-        for (let i = 0; i < 400; i += 1) fleet.step(0.5);
+        // No `populate`, and nothing to settle: the fleet is whatever the
+        // MTA says is out there, and it arrives with the first poll.
+        const fleet = new LiveFleet(loaded, lengths);
         fleetRef.current = fleet;
         handleRef.current.fleet = fleet;
+        // A snapshot may already be waiting; see `latestRef`.
+        applyLatest();
       })
       .catch((cause: Error) =>
         setError(
@@ -85,24 +113,56 @@ export function SubwayNetwork() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyLatest]);
 
   useEffect(() => {
     handleRef.current.visible = visible;
     handleRef.current.labels = labels;
   }, [visible, labels]);
 
+  /*
+    One poll of all eight feeds, every thirty seconds. Shared with the arrival
+    demo further down the page: same route, same edge cache, so having both on
+    screen costs the MTA nothing extra.
+  */
+  useEffect(() => {
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const response = await fetch("/api/subway/live");
+        if (!response.ok) throw new Error(String(response.status));
+        const payload = (await response.json()) as LivePayload;
+        if (cancelled) return;
+        latestRef.current = payload;
+        applyLatest();
+        setFeedError(null);
+      } catch {
+        if (!cancelled) setFeedError("The live feeds could not be reached.");
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [applyLatest]);
+
   useEffect(() => {
     if (reducedMotion !== false) return;
     let frame = 0;
-    let last = performance.now();
     let since = 0;
+    let last = performance.now();
 
     const loop = (now: number) => {
       frame = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
-      fleetRef.current?.step(dt * 3);
+      // Re-placed against the wall clock rather than stepped by a speed. The
+      // trains move at the rate the feed's own predictions imply.
+      fleetRef.current?.advance(Date.now() / 1000);
 
       since += dt;
       if (since > 1) {
@@ -184,6 +244,7 @@ export function SubwayNetwork() {
 
   const trains = fleetRef.current?.vehicles.length ?? 0;
   const moving = fleetRef.current?.moving ?? 0;
+  const feedAge = feed ? Math.max(0, Math.floor(Date.now() / 1000) - feed.at) : null;
   const tooHeavy = !richMotion || reducedMotion !== false || !room;
 
   return (
@@ -471,12 +532,24 @@ export function SubwayNetwork() {
       <p className="label-mono">
         Route shapes, station positions, and line colours are the MTA&rsquo;s
         own static GTFS feed — {data.routes.length} routes,{" "}
-        {data.stations.length} stations. Train positions on this map are still
-        simulated, across all of them. The realtime feeds are protobuf served
-        without CORS headers, so a browser cannot read them directly; the
-        arrival demo below now goes through a proxy on this site that decodes
-        the L feed server-side, and pointing this map at the other seven is the
-        same change repeated.
+        {data.stations.length} stations. The trains are live: all eight
+        realtime feeds, polled every thirty seconds.{" "}
+        {feedError ? (
+          <span className="text-signal">{feedError}</span>
+        ) : feed ? (
+          <>
+            Last snapshot <span data-numeric>{feedAge}s</span> old;{" "}
+            <span data-numeric>{feed.placed}</span> of{" "}
+            <span data-numeric>{feed.of}</span> trips could be placed on the
+            drawn shapes — the rest are on branches and shuttle patterns this
+            map does not draw.
+          </>
+        ) : (
+          "Waiting for the first snapshot…"
+        )}{" "}
+        Nothing here has a speed: a train sits where its own predicted arrival
+        puts it between two platforms, so it crosses each gap in exactly the
+        time the MTA says it will.
       </p>
     </div>
   );

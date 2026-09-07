@@ -86,13 +86,13 @@ export class Fleet {
   vehicles: Vehicle[] = [];
 
   /** Per line: the arc positions of the stations along it, ascending. */
-  private stops: number[][] = [];
-  private stopIds: number[][] = [];
+  protected stops: number[][] = [];
+  protected stopIds: number[][] = [];
   private random: () => number;
 
   constructor(
-    private data: SubwayMapData,
-    private lengths: number[],
+    protected data: SubwayMapData,
+    protected lengths: number[],
     seed = 1337,
   ) {
     this.random = seeded(seed);
@@ -108,7 +108,7 @@ export class Fleet {
    * position, with a loose cap to drop the odd branch a route's most-used
    * pattern does not actually cover.
    */
-  private indexStations() {
+  protected indexStations() {
     const OFF_SHAPE = 0.8;
 
     for (const line of this.data.lines) {
