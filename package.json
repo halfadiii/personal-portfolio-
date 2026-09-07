@@ -24,6 +24,7 @@
     "measure:frames": "node scripts/measure-frames.mjs",
     "gen:dashboard": "python scripts/build-bank-dashboard.py",
     "gen:subway-map": "python scripts/build-subway-map.py",
+    "gen:l-line": "node scripts/build-l-line.mjs",
     "gen:wait-snapshot": "python scripts/build-wait-snapshot.py",
     "gen:print-inspection": "python scripts/build-print-inspection.py",
     "audit": "node scripts/audit.mjs"

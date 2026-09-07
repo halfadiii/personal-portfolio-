@@ -13,7 +13,7 @@ what you are looking at, section 5 to find your way around the files, and
 sections 17 and 18 before you change anything, because most of the code that
 looks strange in here is code that is the way it is for a measured reason.
 
-Last updated: 2026-09-07, at commit `f418e67`.
+Last updated: 2026-09-07, at commit `2b16979`.
 
 ---
 
@@ -177,6 +177,7 @@ npm test             # Playwright: axe on every route + the acceptance checklist
 | `npm run gen:fonts` | Subset the three variable faces (needs Python, fonttools, brotli) |
 | `npm run gen:dashboard` | Rebuild the bank marketing data (needs pandas, scikit-learn, scipy) |
 | `npm run gen:subway-map` | Rebuild the network from the MTA GTFS feed |
+| `npm run gen:l-line` | Rebuild `l-line.json`: the L's stations in order, with their real spacing, out of the network data |
 | `npm run gen:wait-snapshot` | Rebuild the rainfall regression snapshot |
 | `npm run gen:print-inspection` | Rebuild the print inspection run from the production engine's CSV |
 
@@ -242,7 +243,7 @@ portfolio/
   src/
     app/
       layout.tsx            # root: metadata, fonts, JSON-LD, preloader gate script
-      globals.css           # 868 lines: Tailwind theme, utilities, print rules, scene CSS
+      globals.css           # ~1,060 lines: Tailwind theme, utilities, print rules, scene CSS
       icon.svg
       not-found.tsx
       (site)/               # routes wearing the site chrome
@@ -256,15 +257,21 @@ portfolio/
       resume/               # own chrome: inverted surface, no nav in print
         page.tsx
         PrintButton.tsx
-      api/contact/route.ts  # Resend, zod-validated, rate limited
+      api/
+        contact/route.ts    # Resend, zod-validated, rate limited
+        subway/live/route.ts # decodes all eight MTA realtime feeds, server-side
     components/
       motion/               # capability gate, Lenis provider, preloader, handover, idle
       sections/             # Hero, SelectedWork, ScrollTrail, Experience, OffClock, Contact...
       site/                 # header, footer, palette, cursor, MDX, providers, sound
       three/                # every WebGL scene and its helpers
-      viz/                  # MetricMark, PipelineDiagram, RegressionPlot, dashboards
+      viz/                  # MetricMark, PipelineDiagram, RegressionPlot, LineStrip, dashboards
     content/                # typed data, MDX case studies, committed datasets
-    lib/                    # fonts, seo, site, sky, snapshot, bank-data, subway, highlight
+      data/l-line.json      # the L's stations in order, with real spacing
+    lib/                    # fonts, seo, site, sky, snapshot, bank-data, highlight
+      subway-map.ts         # network geometry + the original simulated Fleet
+      subway-fleet-live.ts  # LiveFleet: real trains placed on that geometry
+      subway-live.ts        # the L's stations, train placement, the arrival inference
     stores/ui.ts            # zustand: sound on/off, palette open, cursor label
     styles/tokens.css       # the design tokens
     fonts/                  # subset woff2 + the unsubset sources
@@ -290,6 +297,9 @@ Assigned once and not mixed:
   dashboard. Nothing else.
 - **Hand-written SVG and GLSL** own the bespoke visuals: `MetricMark`, the
   pipeline diagram, every three.js scene.
+- **`gtfs-realtime-bindings`** decodes the MTA's protobuf, and only ever on the
+  server, inside `api/subway/live`. It never reaches the client bundle: the
+  browser is handed JSON and never learns what a protobuf is.
 - **Zustand** owns UI state (sound, palette, cursor label).
 - **Radix** owns the dialog primitives. Deliberately *not* the accordion; see
   section 16.
@@ -392,6 +402,19 @@ targets spelled out. A Download button serves `public/aditya-aryan-resume.pdf`,
 which is **his own tailored one-page document**, not a rendering of the page.
 A Print button prints the page itself.
 
+### `/api/subway/live`
+
+The proxy the live demo runs on. Fetches all eight MTA GTFS-realtime endpoints
+in parallel (measured: 241ms, 443 KB of protobuf, ~500 trains), decodes them,
+and returns about 10 KB of JSON. It exists because the feeds carry no CORS
+headers, so a browser cannot read them at all.
+
+`export const revalidate = 20` is load-bearing rather than an optimisation: the
+edge answers almost every request, so the MTA is asked about three times a
+minute whether one person is watching or a thousand. It returns positions and
+predictions and nothing derived — the arrivals, headways and excess wait are
+inferred in the browser, because watching them being made is the point.
+
 ### `/api/contact`
 
 POST only. Order of operations: rate limit (5 per hour per address, fixed window
@@ -412,7 +435,7 @@ to change what it says, edit a file in `src/content/`.
 | --- | --- |
 | `profile.ts` | Name, role, location, email, phone, LinkedIn, GitHub, the positioning paragraph, four headline metrics, and `education` including coursework |
 | `experience.ts` | The three roles, with bullets and stacks |
-| `projects.ts` | Seven projects: slug, title, hook, period, stack, detail bullets, `featured`, and a `live` link where a demo exists |
+| `projects.ts` | Seven projects: slug, title, hook, period, stack, detail bullets, `featured`, a `live` link where a demo exists, and a `repo` link where the code is public |
 | `metrics.ts` | The one number each project defends, as a typed union: `delta`, `level`, `shortfall`, `count` |
 | `skills.ts` | Five groups |
 | `certifications.ts` | Nine entries; `url` is optional and turns a row into a link |
@@ -469,7 +492,10 @@ what the five bullets name, because merging the entries did not un-learn GCP,
 Airflow or dbt, and he asked for them kept.
 
 **Projects: seven.** NYC subway reliability pipeline (featured, has a live
-demo), Bank marketing strategy (Jan 2025, dated from its own GitHub history:
+demo, and the only one with a public repo:
+`github.com/halfadiii/nyc-subway-reliability`, rendered as a secondary text
+link beside the demo button rather than as a second button — somebody who wants
+to read source goes looking, somebody who does not should not step over it), Bank marketing strategy (Jan 2025, dated from its own GitHub history:
 six commits, 11 to 17 January 2025; has a live dashboard), AI print inspection
 system (has a live demo), Customer churn prediction, Real-time fake news
 detector, Marketing campaign segmentation, Mineral mapping and classification.
@@ -773,11 +799,17 @@ costs one texture fetch.
 
 ### `SubwayMap`
 
-The whole network in 3D from real GTFS shapes, stops and agency colours.
-Everything that repeats is instanced: 496 stations and a few hundred trains
-would be hundreds of draw calls as separate meshes; as two `InstancedMesh`
-objects they are two. Train positions are read from a ref every frame, so React
-never re-renders while they move.
+The whole network in 3D from real GTFS shapes, stops and agency colours, with
+about 490 **real** trains on it. Everything that repeats is instanced: 496
+stations and five hundred trains would be a thousand draw calls as separate
+meshes; as two `InstancedMesh` objects they are two. Positions are read from a
+ref every frame, so React never re-renders while trains move.
+
+The trains come from `LiveFleet`, which subclasses the original simulated
+`Fleet` and reuses the station-to-arc indexing it already did. `Fleet`'s own
+doc comment had promised that swapping in live positions meant replacing `step`
+and nothing else, because everything downstream reads `vehicles`. That held —
+this scene file was not touched.
 
 There used to be a `SubwayScene` alongside it — the single-line version, the L
 in 3D. It is deleted. What replaced it is `viz/LineStrip.tsx`, which is SVG:
@@ -1048,8 +1080,24 @@ engine to read.
 | Lighthouse, desktop | **100 / 100 / 100 / 100** |
 | CLS < 0.02 | **0.0004** measured, **0** as Lighthouse scores it |
 | LCP < 2.0s | **0.70s** under 1.6 Mbps / 150ms RTT / 4× CPU |
-| Initial JS ≤ 180 KB gz | **169 KB** on `/` at the time of that measurement; **183 KB** after the relay landed |
-| Zero axe violations | 36–40 Playwright tests pass, desktop and mobile |
+| Initial JS ≤ 180 KB gz | **169 KB** on `/` at the time of that measurement; **183 KB** after the relay landed, and unchanged since |
+| Zero axe violations | 40 Playwright tests pass, desktop and mobile |
+
+Per-route first load, measured on the current build:
+
+| Route | Page | First load |
+| --- | --- | --- |
+| `/` | 60.8 kB | **183 kB** |
+| `/about` | 179 B | 112 kB |
+| `/dashboard/bank-marketing` | 1.48 kB | 108 kB |
+| `/demo/print-inspection` | 9.06 kB | 124 kB |
+| `/demo/subway` | 1.54 kB | 108 kB |
+| `/resume` | 386 B | 107 kB |
+| `/work/[slug]` | 3.04 kB | 109 kB |
+
+`/demo/subway` is worth a note: it carries two live views and a 3D map for
+108 kB, because the protobuf decoding is server-side and the strip diagram is
+SVG. Replacing that diagram's WebGL scene took three.js off half the route.
 
 Both LCP figures are reported rather than picking the flattering one.
 
@@ -1232,6 +1280,32 @@ the preloader is the signature — kill anything on 3100 and run it again. And d
 not leave stray `next start` servers around: several production servers plus the
 suite's own four workers is enough contention on its own to time tests out.
 
+### Do not point a test loop at the live site
+
+Verifying the live demo meant hitting `adityaaryan.in` repeatedly — a polling
+`curl` loop waiting for a deploy, plus several headless-browser runs against the
+production domain. Vercel's bot protection took that for what it looked like,
+and started answering this machine with a **403 "Vercel Security Checkpoint"**
+on every path including the homepage.
+
+Two things to know if it happens again.
+
+It is a challenge aimed at a client, not necessarily an outage. A headless
+browser fails it by design and `curl` cannot solve it at all, so a 403 here says
+nothing about whether real visitors are affected. The way to find out is to open
+the site on a phone, on a different network. If that is challenged too, the
+switch is Vercel → the project → Firewall → Attack Challenge Mode.
+
+And there is no need to poll the site to find out whether a deploy landed.
+GitHub knows: `/repos/<owner>/<repo>/commits/<sha>/status` carries Vercel's own
+success or failure, and `/deployments` carries the environment URL. That is one
+request against a different service instead of a hundred against the one you are
+trying not to knock over.
+
+Test against `npx next start` locally. Use the live site to confirm the handful
+of things that genuinely only exist in production — edge caching being the one
+that bit here — and confirm them **once**.
+
 ### One known console notice
 
 On desktop only: `THREE.Clock: This module has been deprecated`. It comes from
@@ -1282,7 +1356,8 @@ replaced.
 
 ## 17. Complete change history
 
-Thirty-eight commits, 2026-09-01 to 2026-09-07. In order.
+Forty-one commits, 2026-09-01 to 2026-09-07. In order. Three of them are
+documentation-only updates to this file and are not listed separately.
 
 ### Phase 1: the build (2026-09-01 to 09-04)
 
