@@ -471,10 +471,12 @@ export function SubwayNetwork() {
       <p className="label-mono">
         Route shapes, station positions, and line colours are the MTA&rsquo;s
         own static GTFS feed — {data.routes.length} routes,{" "}
-        {data.stations.length} stations. Train positions are simulated: the
-        realtime feeds are protobuf served without CORS headers, so a browser
-        cannot read them directly. Wiring a proxy in replaces one method on the
-        fleet and nothing else.
+        {data.stations.length} stations. Train positions on this map are still
+        simulated, across all of them. The realtime feeds are protobuf served
+        without CORS headers, so a browser cannot read them directly; the
+        arrival demo below now goes through a proxy on this site that decodes
+        the L feed server-side, and pointing this map at the other seven is the
+        same change repeated.
       </p>
     </div>
   );

@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useCapability } from "@/components/motion/capability";
-import { L_LINE, LINE_LENGTH_KM, type Prediction, type Train } from "@/lib/subway-sim";
+import type { LivePayload } from "@/app/api/subway/live/route";
+import {
+  LATE_SECONDS,
+  LINE_LENGTH,
+  STATIONS,
+  stationIndex,
+  type Direction,
+  type Placed,
+} from "@/lib/subway-live";
 
 /**
  * The L, drawn flat, with the feed's belief laid over the trains' actual
@@ -49,15 +57,23 @@ import { L_LINE, LINE_LENGTH_KM, type Prediction, type Train } from "@/lib/subwa
  */
 
 export type StripHandle = {
-  trains: Train[];
-  /** Index of the station the metrics panel is measuring. */
-  focus: number;
-  /** Train the beam is drawn for. */
+  /** Trains in the shown direction, already placed along the line. */
+  trains: Placed[];
+  /** Stop id the metrics panel is measuring. */
+  focus: string;
+  /** Trip id the beam is drawn for. */
   watched: string | null;
-  /** Simulated clock, in seconds. */
+  /** Wall clock, epoch seconds. Live, not simulated. */
   t: number;
   /** The last poll's predictions for the watched train, nearest first. */
-  beam: Prediction[];
+  beam: { stop: string; at: number }[];
+  /** Which way the shown trains are running. */
+  direction: Direction;
+  /**
+   * The last poll, kept here so the frame loop can re-place trains against the
+   * live clock without the parent re-rendering sixty times a second.
+   */
+  payload: LivePayload | null;
 };
 
 /* Geometry, in viewBox units. The box is 1000 wide so every x is a permille of
@@ -70,8 +86,8 @@ const RAIL_Y = 152;
 const BEAM_Y = 66;
 const SPAN = W - PAD * 2;
 
-function xOf(km: number): number {
-  return PAD + (km / LINE_LENGTH_KM) * SPAN;
+function xOf(at: number): number {
+  return PAD + (at / LINE_LENGTH) * SPAN;
 }
 
 /** Seconds as `m:ss`, or `now` once it is inside a poll interval of arriving. */
@@ -98,7 +114,7 @@ export function LineStrip({
   // The static half: ticks and names never move, so they are rendered once by
   // React and never touched again.
   const stations = useMemo(
-    () => L_LINE.map((station, i) => ({ ...station, i, x: xOf(station.km) })),
+    () => STATIONS.map((station) => ({ ...station, x: xOf(station.at) })),
     [],
   );
 
@@ -111,21 +127,22 @@ export function LineStrip({
     const readout = svg.querySelector<HTMLElement>("[data-readout]");
     if (!trainLayer || !beamLayer) return;
 
-    const ticks = new Map<number, SVGGElement>();
+    const ticks = new Map<string, SVGGElement>();
     for (const node of svg.querySelectorAll<SVGGElement>("[data-station]")) {
-      ticks.set(Number(node.dataset.station), node);
+      if (node.dataset.station) ticks.set(node.dataset.station, node);
     }
-    let lastFocus = -1;
+    let lastFocus = "";
 
     let frame = 0;
-    let lastNext = -1;
+    /** The head of the beam last frame: the stop the train was heading for. */
+    let lastHead: string | null = null;
     let lastWatched: string | null = null;
     /** One frame is still drawn after a pause, then nothing until it resumes. */
     let settled = false;
 
     /** Mark the platform a train has just reached. */
-    const strike = (index: number) => {
-      const tick = ticks.get(index);
+    const strike = (stop: string) => {
+      const tick = ticks.get(stop);
       if (!tick || reducedMotion) return;
       tick.removeAttribute("data-struck");
       // Force the animation to restart even if it is already running.
@@ -144,7 +161,7 @@ export function LineStrip({
       settled = !runningRef.current;
 
       /* -- the trains ------------------------------------------------- */
-      const live = state.trains.filter((train) => !train.retired);
+      const live = state.trains;
       // Reuse nodes rather than rebuilding: the set changes only when a train
       // enters or leaves service, which is a few times a minute.
       while (trainLayer.childElementCount < live.length) {
@@ -160,15 +177,19 @@ export function LineStrip({
         trainLayer.lastElementChild?.remove();
       }
 
-      live.forEach((train, index) => {
+      live.forEach((placed, index) => {
         const mark = trainLayer.children[index] as SVGRectElement;
-        mark.setAttribute("x", String(xOf(train.km) - 6.5));
-        const watched = train.id === state.watched;
+        mark.setAttribute("x", String(xOf(placed.at) - 6.5));
+        const watched = placed.train.id === state.watched;
         mark.setAttribute("data-watched", watched ? "" : "off");
-        // A train more than a minute down is drawn hollow. Delay is the only
-        // thing on this diagram encoded by appearance rather than position,
-        // and it earns it: bunching is what excess wait measures.
-        mark.setAttribute("data-late", train.delay > 60 ? "" : "off");
+        // A train more than a minute down is drawn hollow. That figure is the
+        // MTA's own, against its own timetable, and it is the only thing on
+        // this diagram encoded by appearance rather than position: bunching is
+        // what excess wait measures.
+        mark.setAttribute(
+          "data-late",
+          (placed.train.delay ?? 0) > LATE_SECONDS ? "" : "off",
+        );
       });
 
       /* -- the station the metrics panel is measuring -------------------- */
@@ -181,14 +202,16 @@ export function LineStrip({
       }
 
       /* -- the beam ---------------------------------------------------- */
-      const watched = live.find((train) => train.id === state.watched);
+      const watched = live.find((placed) => placed.train.id === state.watched);
 
-      if (watched && watched.next !== lastNext && lastWatched === state.watched) {
-        // `next` has advanced: the train has reached the platform it was
-        // heading for, which is the instant an arrival happens.
-        if (lastNext >= 0) strike(lastNext);
+      const head = state.beam[0]?.stop ?? null;
+      if (head !== lastHead && lastWatched === state.watched && lastHead) {
+        // The stop at the head of the beam is gone from the newest snapshot.
+        // That is the arrival: not an event the feed sent, but a row it
+        // stopped sending.
+        strike(lastHead);
       }
-      lastNext = watched?.next ?? -1;
+      lastHead = head;
       lastWatched = state.watched;
 
       const beam = watched ? state.beam : [];
@@ -210,14 +233,21 @@ export function LineStrip({
 
       beam.forEach((prediction, index) => {
         const group = beamLayer.children[index] as SVGGElement;
-        const station = L_LINE[prediction.station];
+        const at = stationIndex(prediction.stop);
+        const station = at === undefined ? undefined : STATIONS[at];
         if (!station) return;
-        const x = xOf(station.km);
+        const x = xOf(station.at);
         const stem = group.firstElementChild as SVGLineElement;
         const label = group.lastElementChild as SVGTextElement;
+        // Alternate rows. Stations on this line get as close as 25 units and a
+        // countdown is wider than that, so every other one is lifted clear
+        // rather than shrinking all of them to fit the tightest pair.
+        const lift = index % 2 === 0 ? 0 : -13;
         stem.setAttribute("x1", String(x));
         stem.setAttribute("x2", String(x));
+        stem.setAttribute("y1", String(BEAM_Y + 6 + lift));
         label.setAttribute("x", String(x));
+        label.setAttribute("y", String(BEAM_Y + lift));
         label.textContent = countdown(prediction.at - state.t);
         // The nearest prediction is the one about to resolve.
         group.setAttribute("data-next", index === 0 ? "" : "off");
@@ -227,10 +257,11 @@ export function LineStrip({
       const reach = svg.querySelector<SVGLineElement>("[data-reach]");
       if (reach) {
         const last = beam.at(-1);
-        const lastStation = last ? L_LINE[last.station] : undefined;
+        const lastIndex = last ? stationIndex(last.stop) : undefined;
+        const lastStation = lastIndex === undefined ? undefined : STATIONS[lastIndex];
         if (watched && lastStation) {
-          reach.setAttribute("x1", String(xOf(watched.km)));
-          reach.setAttribute("x2", String(xOf(lastStation.km)));
+          reach.setAttribute("x1", String(xOf(watched.at)));
+          reach.setAttribute("x2", String(xOf(lastStation.at)));
           reach.setAttribute("data-on", "");
         } else {
           reach.removeAttribute("data-on");
@@ -238,11 +269,14 @@ export function LineStrip({
       }
 
       if (readout) {
+        const delay = Math.round(watched?.train.delay ?? 0);
         readout.textContent = watched
-          ? `${watched.id} · ${
-              watched.delay > 30
-                ? `${Math.round(watched.delay)}s down`
-                : "on time"
+          ? `${watched.train.id} · ${
+              delay > 30
+                ? `${delay}s down`
+                : delay < -30
+                  ? `${-delay}s early`
+                  : "on time"
             } · predicting ${beam.length} stop${beam.length === 1 ? "" : "s"}`
           : "waiting for a train to follow";
       }
@@ -288,7 +322,7 @@ export function LineStrip({
           />
 
           {stations.map((station) => (
-            <g key={station.id} data-station={station.i}>
+            <g key={station.id} data-station={station.id}>
               <line
                 x1={station.x}
                 x2={station.x}
@@ -329,8 +363,8 @@ export function LineStrip({
           <span className="strip-key strip-key--watched" aria-hidden /> followed
         </span>
         <span>
-          <span className="strip-key strip-key--late" aria-hidden /> over a
-          minute down
+          <span className="strip-key strip-key--late" aria-hidden /> over three
+          minutes down
         </span>
         <span>
           <span className="strip-key strip-key--stem" aria-hidden /> a stop the

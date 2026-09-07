@@ -4,7 +4,7 @@ import { SectionLabel } from "@/components/site/SectionHeading";
 import { SubwayDemoPanel } from "@/components/viz/SubwayDemoPanel";
 import { SubwayNetworkPanel } from "@/components/viz/SubwayNetworkPanel";
 import { feeds } from "@/content/pipeline";
-import { POLL_SECONDS } from "@/lib/subway-sim";
+import { POLL_SECONDS } from "@/lib/subway-live";
 
 export const metadata: Metadata = {
   title: "Subway arrival demo",
@@ -38,7 +38,7 @@ export default function SubwayDemoPage() {
           on reading that absence correctly — so here it is, running.
         </p>
         <p className="label-mono">
-          Simulation · the same inference as{" "}
+          Live · the same inference as{" "}
           <code className="text-signal">int_inferred_arrivals.sql</code>
         </p>
       </header>
@@ -56,10 +56,12 @@ export default function SubwayDemoPage() {
           Now watch one arrival happen.
         </h2>
         <p className="measure text-lead text-steel mt-5">
-          The map above is the system. This is the mechanism underneath it, on a
-          single line, slowed down enough to see: the feed publishing, the
-          numbers converging, and a stop dropping off the list at the moment a
-          train reaches it.
+          The map above is the system. This is the mechanism underneath it, on
+          the L, running right now: the MTA&rsquo;s own feed polled every{" "}
+          {POLL_SECONDS} seconds, the numbers converging, and a stop dropping
+          off the list at the moment a train reaches it. Nothing here is
+          simulated, and nothing is pre-recorded — the arrivals below were
+          inferred while you had this page open.
         </p>
 
         <div className="mt-10">
@@ -75,8 +77,12 @@ export default function SubwayDemoPage() {
         <ol className="mt-10 flex list-none flex-col p-0">
           {[
             {
-              title: "The trains are real objects with real positions",
-              body: "Each one accelerates out of a platform, runs to the next, and dwells there for twenty-odd seconds. The simulation knows exactly where every train is at every instant — which is the one thing production can never know.",
+              title: "These are real trains, on the real L, right now",
+              body: "The MTA publishes eight GTFS-realtime feeds; this reads the one carrying the L. It is protobuf, and it is served without CORS headers, so a browser cannot fetch it — the decoding happens in a route handler on this site's own server, which is what every live transit map on the web has behind it.",
+            },
+            {
+              title: "A train between platforms is drawn where the feed thinks it is",
+              body: "The feed publishes which stop a train is at or heading for, and when it expects to arrive. It never publishes a position. So the mark between two platforms is that prediction run backwards — the feed's belief made spatial, not a measurement. If the belief is wrong the mark is wrong in exactly the same way, which is the honest picture and also the interesting one: it is the same belief the arrival is about to be inferred from.",
             },
             {
               title: "The trains move continuously; the feed does not",
@@ -96,11 +102,11 @@ export default function SubwayDemoPage() {
             },
             {
               title: "Then it becomes headway, and excess wait",
-              body: "Consecutive inferred arrivals at one station give headways; headways give excess wait, the time a rider spends beyond what the timetable promised. Press “delay a train” and watch bunching push it up.",
+              body: "Consecutive inferred arrivals at one platform give headways; headways give excess wait, the time a rider spends beyond what an evenly spread service of the same frequency would ask. Bunching pushes it up while leaving the mean headway untouched, which is exactly why the mean headway is the wrong metric.",
             },
             {
-              title: "And the error is checkable, here only",
-              body: "Because the simulation has ground truth, every inferred arrival can be compared against where the train actually was. In production that column does not exist, which is the whole reason the rule has to be stated rather than tuned.",
+              title: "There is no error column, and there cannot be",
+              body: "Nothing here can be graded, because nobody publishes when the train actually arrived — that absence is the entire premise of the project. The method is checked instead in the pipeline's own test suite, against synthetic feeds whose answer is known by construction: a train that arrives, one cancelled ten minutes out, one still in the newest snapshot. That runs on every commit, which is a better place for a correctness check than a page.",
             },
           ].map((step, i) => (
             <li

@@ -1,221 +1,319 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LineStrip, type StripHandle } from "./LineStrip";
+import type { LivePayload } from "@/app/api/subway/live/route";
 import {
-  L_LINE,
+  DIRECTIONS,
+  GRACE_SECONDS,
+  Inference,
   POLL_SECONDS,
-  SubwaySim,
-  clock,
-  type InferredArrival,
-} from "@/lib/subway-sim";
+  STATIONS,
+  metricsFor,
+  place,
+  stationIndex,
+  stationName,
+  type Arrival,
+  type Direction,
+  type Metrics,
+  type Placed,
+} from "@/lib/subway-live";
 import { cn } from "@/lib/utils";
+import { LineStrip, type StripHandle } from "./LineStrip";
 
 /**
- * The subway pipeline, running.
+ * The pipeline, running on the L, right now.
  *
- * Trains move on a simulated line; the feed they would publish is generated
- * every thirty seconds; and the same inference the warehouse runs is applied to
- * it live. The prediction table is the part worth watching — the numbers revise
- * poll by poll and then a stop drops off the list, which is the moment an
- * arrival happens and the only trace the real feed ever leaves.
+ * Every thirty seconds this asks `/api/subway/live` for one poll of the MTA's
+ * feed and applies the same arrival inference the warehouse applies: hold the
+ * last prediction each trip-stop pair carried, and when a pair stops appearing,
+ * decide whether a train arrived or a trip was pulled.
  *
- * Because the simulation knows where the trains actually are, it can also show
- * how far the inference landed from the truth. Production never gets to check
- * its own work like this; that is exactly why the method has to be defensible.
+ * It used to be a simulation, because the realtime feeds carry no CORS headers
+ * and a browser cannot read them. The proxy fixed that. What went with the
+ * simulation is the error column — it knew where its trains really were, so it
+ * could grade its own inference — and losing it is the honest outcome, because
+ * **no such column exists in production either.** That is the premise of the
+ * whole project. The method is checked in the pipeline's own test suite, on
+ * fixtures whose answer is known by construction, which is a better place for
+ * it than a toy in a web page.
+ *
+ * Two clocks run here and they are deliberately not synchronised. Trains are
+ * re-placed every animation frame, because they are physical objects moving
+ * continuously. The predictions change only when a poll lands, because a belief
+ * is not continuous. Watching the gap open between them is the demo.
  */
-const SPEEDS = [1, 4, 12] as const;
-/** Simulated seconds per real second at 1×. Fast enough to see a poll land. */
-const BASE_RATE = 6;
 
-type Snapshot = {
-  t: number;
-  trains: { id: string; km: number; next: number; delay: number }[];
-  watched: string | null;
-  rows: { t: number; predictions: { station: number; at: number }[] | null }[];
-  recent: InferredArrival[];
-  metrics: ReturnType<SubwaySim["metricsAt"]>;
+/** Bedford Av: the busiest platform on the line, so a headway appears soonest. */
+const DEFAULT_FOCUS = "L08";
+/** How many polls the table keeps. Seven rows is about three minutes. */
+const HISTORY = 7;
+
+type View = {
+  payload: LivePayload | null;
+  error: string | null;
+  polls: number;
   discarded: number;
+  watchingSince: number | null;
+  arrivals: Arrival[];
+  rows: { t: number; predictions: Map<string, number> | null }[];
+};
+
+const EMPTY: View = {
+  payload: null,
+  error: null,
+  polls: 0,
+  discarded: 0,
+  watchingSince: null,
+  arrivals: [],
+  rows: [],
 };
 
 export function SubwayDemo() {
-  const [focus, setFocus] = useState(11);
-  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(4);
+  const [direction, setDirection] = useState<Direction>("S");
+  const [focus, setFocus] = useState(DEFAULT_FOCUS);
   const [running, setRunning] = useState(true);
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
+  const [view, setView] = useState<View>(EMPTY);
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
-  const simRef = useRef<SubwaySim | null>(null);
+  const inference = useRef(new Inference());
+  const rows = useRef<View["rows"]>([]);
+  const watched = useRef<string | null>(null);
+  const directionRef = useRef(direction);
+  directionRef.current = direction;
+
   const handleRef = useRef<StripHandle>({
     trains: [],
     focus,
     watched: null,
-    t: 0,
+    t: Math.floor(Date.now() / 1000),
     beam: [],
+    direction,
+    payload: null,
   });
-  const watchedRef = useRef<string | null>(null);
 
-  // Kept out of state so the loop never restarts when they change.
-  const speedRef = useRef(speed);
-  const runningRef = useRef(running);
-  const focusRef = useRef(focus);
-  speedRef.current = speed;
-  runningRef.current = running;
-  focusRef.current = focus;
+  /* -- polling ---------------------------------------------------------- */
+
+  const poll = useCallback(async () => {
+    try {
+      const response = await fetch("/api/subway/live", { cache: "no-store" });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setView((previous) => ({
+          ...previous,
+          error: body?.error ?? "The live feed could not be read.",
+        }));
+        return;
+      }
+      const payload = (await response.json()) as LivePayload;
+
+      // The inference sees every train on the line, both directions: an arrival
+      // is an arrival whichever way it was going, and the panel filters after.
+      inference.current.accept(payload);
+
+      // Keep following the same train while it is still in service.
+      const inDirection = payload.trains.filter(
+        (train) => train.direction === directionRef.current,
+      );
+      if (
+        !watched.current ||
+        !inDirection.some((train) => train.id === watched.current)
+      ) {
+        watched.current =
+          [...inDirection].sort(
+            (a, b) => b.predictions.length - a.predictions.length,
+          )[0]?.id ?? null;
+        // A new train means the old train's rows describe somebody else.
+        rows.current = [];
+      }
+
+      const followed = payload.trains.find(
+        (train) => train.id === watched.current,
+      );
+      rows.current = [
+        ...rows.current,
+        {
+          t: payload.generatedAt || payload.fetchedAt,
+          predictions: followed
+            ? new Map(followed.predictions.map((p) => [p.stop, p.at]))
+            : null,
+        },
+      ].slice(-HISTORY);
+
+      setView({
+        payload,
+        error: null,
+        polls: inference.current.polls,
+        discarded: inference.current.discarded,
+        watchingSince: inference.current.watchingSince,
+        arrivals: [...inference.current.arrivals],
+        rows: [...rows.current],
+      });
+    } catch {
+      setView((previous) => ({
+        ...previous,
+        error: "The live feed could not be reached.",
+      }));
+    }
+  }, []);
 
   useEffect(() => {
-    const sim = new SubwaySim({ headwaySeconds: 240, seed: 7 });
-    simRef.current = sim;
+    if (!running) return;
+    void poll();
+    const timer = window.setInterval(() => void poll(), POLL_SECONDS * 1000);
+    return () => window.clearInterval(timer);
+  }, [poll, running]);
 
-    // Start mid-service rather than with an empty line.
-    for (let i = 0; i < 2200; i += 1) sim.step(1);
+  /* -- the wall clock, and the strip ------------------------------------ */
 
+  useEffect(() => {
     let frame = 0;
-    let last = performance.now();
-    let sincePublish = 0;
+    let lastSecond = 0;
+    const tick = () => {
+      frame = requestAnimationFrame(tick);
+      const seconds = Date.now() / 1000;
+      handleRef.current.t = seconds;
 
-    const loop = (now: number) => {
-      frame = requestAnimationFrame(loop);
-      const real = Math.min(0.1, (now - last) / 1000);
-      last = now;
-
-      if (runningRef.current) {
-        const simSeconds = real * BASE_RATE * speedRef.current;
-        // Fixed steps keep arrivals from being missed at high speed.
-        let remaining = simSeconds;
-        while (remaining > 0) {
-          const dt = Math.min(1, remaining);
-          sim.step(dt);
-          remaining -= dt;
-        }
+      // Re-placed every frame rather than every poll: placement is a function
+      // of the clock, so this is what makes a train creep toward a platform
+      // between snapshots instead of jumping when one lands.
+      const payload = handleRef.current.payload;
+      if (payload) {
+        handleRef.current.trains = payload.trains
+          .filter((train) => train.direction === handleRef.current.direction)
+          .map((train) => place(train, seconds))
+          .filter((placed): placed is Placed => placed !== null);
       }
 
-      if (
-        !watchedRef.current ||
-        !sim.trains.some((train) => train.id === watchedRef.current)
-      ) {
-        watchedRef.current = sim.pickWatchTarget();
-      }
-
-      handleRef.current.trains = sim.trains;
-      handleRef.current.focus = focusRef.current;
-      handleRef.current.watched = watchedRef.current;
-      handleRef.current.t = sim.t;
-      // The beam is the *last published poll*, not the truth. It sits still
-      // while the train moves and jumps when a poll lands, which is the
-      // difference the diagram exists to show.
-      const latest = sim.polls[sim.polls.length - 1];
-      handleRef.current.beam =
-        (watchedRef.current && latest?.trips.get(watchedRef.current)) || [];
-
-      // React only needs the panels, and only a few times a second.
-      sincePublish += real;
-      if (sincePublish > 0.25) {
-        sincePublish = 0;
-        setSnapshot({
-          t: sim.t,
-          trains: sim.trains.map((train) => ({
-            id: train.id,
-            km: train.km,
-            next: train.next,
-            delay: train.delay,
-          })),
-          watched: watchedRef.current,
-          rows: watchedRef.current ? sim.watch(watchedRef.current, 7) : [],
-          recent: sim.inferred.slice(-6).reverse(),
-          metrics: sim.metricsAt(focusRef.current),
-          discarded: sim.discarded,
-        });
+      // The countdowns are whole seconds; React only needs waking that often.
+      const whole = Math.floor(seconds);
+      if (whole !== lastSecond) {
+        lastSecond = whole;
+        setNow(whole);
       }
     };
-
-    frame = requestAnimationFrame(loop);
+    frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  const injectDelay = useCallback(() => {
-    const id = simRef.current?.injectDelay();
-    if (id) {
-      setFlash(`Held ${id} at its platform for 150 seconds.`);
-      window.setTimeout(() => setFlash(null), 4000);
-    }
-  }, []);
+  // Hand the frame loop what it needs without making it a React dependency.
+  handleRef.current.payload = view.payload;
+  handleRef.current.direction = direction;
+  handleRef.current.focus = focus;
+  handleRef.current.watched = watched.current;
+  handleRef.current.beam =
+    view.payload?.trains.find((train) => train.id === watched.current)
+      ?.predictions ?? [];
 
-  const watchedTrain = snapshot?.trains.find((t) => t.id === snapshot.watched);
+  /* -- derived ---------------------------------------------------------- */
 
-  // Stops still being predicted for the watched train, nearest first.
+  const metrics: Metrics = useMemo(
+    () => metricsFor(view.arrivals, focus, direction),
+    [view.arrivals, focus, direction],
+  );
+
+  const recent = useMemo(
+    () => [...view.arrivals].slice(-6).reverse(),
+    [view.arrivals],
+  );
+
+  /** Stops the followed train is predicting, in line order, nearest six. */
   const columns = useMemo(() => {
-    if (!snapshot?.rows.length) return [] as number[];
-    const seen = new Set<number>();
-    for (const row of snapshot.rows) {
-      for (const p of row.predictions ?? []) seen.add(p.station);
+    const seen = new Set<string>();
+    for (const row of view.rows) {
+      for (const stop of row.predictions?.keys() ?? []) seen.add(stop);
     }
-    return [...seen].sort((a, b) => a - b).slice(0, 6);
-  }, [snapshot]);
+    return [...seen]
+      .sort((a, b) => (stationIndex(a) ?? 0) - (stationIndex(b) ?? 0))
+      .slice(0, 6);
+  }, [view.rows]);
+
+  const feedAge = view.payload
+    ? Math.max(0, now - view.payload.generatedAt)
+    : null;
+
+  const clock = (epoch: number) =>
+    new Date(epoch * 1000).toLocaleTimeString("en-US", {
+      hour12: false,
+      timeZone: "America/New_York",
+    });
 
   return (
     <div className="flex flex-col gap-8">
+      {/* -- controls ---------------------------------------------------- */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setRunning((value) => !value)}
+            onClick={() => setRunning((on) => !on)}
             className="label-mono border-signal text-signal ease-brief hover:bg-signal hover:text-void border px-4 py-2 transition-colors duration-[var(--dur-ui)]"
           >
-            {running ? "Pause" : "Run"}
+            {running ? "Pause" : "Resume"}
           </button>
 
-          {SPEEDS.map((value) => (
+          {(["S", "N"] as Direction[]).map((option) => (
             <button
-              key={value}
+              key={option}
               type="button"
-              aria-pressed={speed === value}
-              onClick={() => setSpeed(value)}
+              onClick={() => {
+                setDirection(option);
+                watched.current = null;
+                rows.current = [];
+              }}
+              aria-pressed={direction === option}
               className={cn(
                 "label-mono ease-brief border px-3 py-2 transition-colors duration-[var(--dur-ui)]",
-                speed === value
+                direction === option
                   ? "border-signal text-signal"
-                  : "border-hairline text-steel hover:border-steel",
+                  : "border-hairline text-steel hover:border-signal hover:text-signal",
               )}
             >
-              {value}×
+              to {DIRECTIONS[option].label}
             </button>
           ))}
-
-          <button
-            type="button"
-            onClick={injectDelay}
-            className="label-mono border-hairline text-steel ease-brief hover:border-signal hover:text-signal border px-3 py-2 transition-colors duration-[var(--dur-ui)]"
-          >
-            Delay a train
-          </button>
         </div>
 
         <p className="label-mono" aria-live="polite">
-          <span className="text-signal" data-numeric>
-            {clock(snapshot?.t ?? 0)}
-          </span>{" "}
-          / simulated clock / {snapshot?.trains.length ?? 0} in service
+          {view.error ? (
+            <span className="text-signal">{view.error}</span>
+          ) : view.payload ? (
+            <>
+              <span className="text-signal" data-numeric>
+                {clock(view.payload.generatedAt)}
+              </span>{" "}
+              / MTA feed, {feedAge}s old /{" "}
+              <span data-numeric>{view.payload.trains.length}</span> L trains
+              running
+            </>
+          ) : (
+            "asking the MTA…"
+          )}
         </p>
       </div>
 
-      {flash ? (
-        <p className="label-mono border-signal text-signal border px-4 py-3">
-          {flash}
-        </p>
-      ) : null}
-
+      {/* -- the diagram ------------------------------------------------- */}
       <div className="border-hairline w-full border p-4 sm:p-6">
-        <LineStrip handleRef={handleRef} running={running} />
+        {view.payload ? (
+          <LineStrip handleRef={handleRef} running={running && !view.error} />
+        ) : (
+          <p className="label-mono grid min-h-[12rem] place-items-center p-6 text-center">
+            {view.error ??
+              "Fetching one poll of the MTA's L feed. It is protobuf, and it is decoded on the server, because the feed sends no CORS headers and a browser is not allowed to read it."}
+          </p>
+        )}
       </div>
 
       <p className="label-mono">
-        Simulated trains on the L, not measured service. Station names and the
-        eight-feed registry are real; the trains are generated so the mechanism
-        can be watched end to end.
+        Live, from the MTA&rsquo;s <code className="text-signal">gtfs-l</code>{" "}
+        endpoint, polled every {POLL_SECONDS} seconds. Between platforms a train
+        is drawn where its own predicted arrival implies it is, so the mark is
+        the feed&rsquo;s belief rather than a measured position. The feed never
+        publishes one.
       </p>
 
       <div className="grid gap-10 xl:grid-cols-[1.35fr_1fr]">
+        {/* -- the feed ------------------------------------------------- */}
         <section
           aria-labelledby="watch-title"
           className="flex min-w-0 flex-col gap-4"
@@ -229,78 +327,67 @@ export function SubwayDemo() {
               Watch a stop drop off the list.
             </h3>
             <p className="measure text-small text-steel mt-2">
-              Each row is one poll of the feed for train{" "}
-              <span className="text-signal">{snapshot?.watched ?? "—"}</span>.
+              Each row is one poll for train{" "}
+              <span className="text-signal">{watched.current ?? "—"}</span>.
               Columns are the stops it is predicting. The numbers revise as it
-              gets closer, and when it passes a platform that column empties —
-              that gap is the arrival, and it is the only signal the feed gives.
+              gets closer, and when it passes a platform that column empties.
+              That gap is the arrival, and it is the only signal the feed gives.
             </p>
           </div>
 
-          <div
-            className="overflow-x-auto"
-            tabIndex={0}
-            role="region"
-            aria-label="Feed predictions per poll, scrollable"
-          >
+          <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left">
               <caption className="sr-only">
-                Predicted arrival times per poll for the train being followed.
+                Predicted arrival times published for the followed train, one
+                row per poll of the live MTA feed.
               </caption>
               <thead>
                 <tr className="rule-top rule-bottom">
                   <th scope="col" className="label-mono text-signal py-2 pr-4">
                     poll
                   </th>
-                  {columns.map((station) => (
+                  {columns.map((stop) => (
                     <th
-                      key={station}
+                      key={stop}
                       scope="col"
                       className="label-mono text-signal max-w-[7rem] truncate py-2 pr-4"
                     >
-                      {L_LINE[station].name}
+                      {stationName(stop)}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {snapshot?.rows.map((row, i) => {
-                  const previous = snapshot.rows[i - 1];
+                {view.rows.map((row, index) => {
+                  const previous = view.rows[index - 1];
                   return (
                     <tr key={row.t} className="rule-bottom last:border-b-0">
-                      <th
-                        scope="row"
-                        className="label-mono py-2 pr-4 whitespace-nowrap"
+                      <td
                         data-numeric
+                        className="label-mono py-2 pr-4 whitespace-nowrap"
                       >
                         {clock(row.t)}
-                      </th>
-                      {columns.map((station) => {
-                        const now = row.predictions?.find(
-                          (p) => p.station === station,
-                        );
-                        const before = previous?.predictions?.find(
-                          (p) => p.station === station,
-                        );
-                        const vanished = !now && Boolean(before);
+                      </td>
+                      {columns.map((stop) => {
+                        const at = row.predictions?.get(stop);
+                        const wasThere = previous?.predictions?.has(stop);
+                        // Present before, gone now: this is the moment.
+                        const dropped = !at && wasThere;
                         return (
                           <td
-                            key={station}
+                            key={stop}
+                            data-numeric
                             className={cn(
                               "label-mono py-2 pr-4 whitespace-nowrap",
-                              now ? "text-signal" : "text-hairline",
-                              vanished && "text-signal",
+                              at ? "text-signal" : "text-steel",
                             )}
-                            data-numeric
                           >
-                            {now ? (
-                              clock(now.at)
-                            ) : vanished ? (
-                              <span title="Prediction vanished: this is an arrival">
-                                ↳ arrived
-                              </span>
+                            {at ? (
+                              clock(at)
+                            ) : dropped ? (
+                              <span className="text-signal">↳ arrived</span>
                             ) : (
-                              "·"
+                              <span aria-hidden>·</span>
                             )}
                           </td>
                         );
@@ -308,21 +395,22 @@ export function SubwayDemo() {
                     </tr>
                   );
                 })}
+                {view.rows.length === 0 ? (
+                  <tr>
+                    <td
+                      className="label-mono py-4"
+                      colSpan={columns.length + 1}
+                    >
+                      waiting for the first poll…
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
-
-          {watchedTrain ? (
-            <p className="label-mono">
-              Next stop{" "}
-              {L_LINE[Math.min(watchedTrain.next, L_LINE.length - 1)].name}
-              {watchedTrain.delay > 20
-                ? ` · running ${Math.round(watchedTrain.delay)}s late`
-                : " · on time"}
-            </p>
-          ) : null}
         </section>
 
+        {/* -- what it produces ------------------------------------------ */}
         <section
           aria-labelledby="metrics-title"
           className="flex flex-col gap-4"
@@ -333,12 +421,13 @@ export function SubwayDemo() {
               produces
             </p>
             <h3 id="metrics-title" className="font-display text-sub mt-2">
-              Headway, excess wait, and the error.
+              Headway, and excess wait.
             </h3>
             <p className="measure text-small text-steel mt-2">
-              Built only from inferred arrivals — the same inputs the warehouse
-              has. The error column is the part production never sees: how far
-              each inferred time landed from where the train actually was.
+              Built only from arrivals this page has inferred since you opened
+              it — the same inputs the warehouse has, and nothing else. There is
+              no error column, because nobody publishes when the train actually
+              arrived. That absence is the whole reason the pipeline exists.
             </p>
           </div>
 
@@ -346,11 +435,11 @@ export function SubwayDemo() {
             Station being measured
             <select
               value={focus}
-              onChange={(event) => setFocus(Number(event.target.value))}
+              onChange={(event) => setFocus(event.target.value)}
               className="border-hairline bg-panel text-signal focus-visible:border-signal text-small border px-3 py-2 font-mono"
             >
-              {L_LINE.map((station, i) => (
-                <option key={station.id} value={i}>
+              {STATIONS.map((station) => (
+                <option key={station.id} value={station.id}>
                   {station.name}
                 </option>
               ))}
@@ -360,51 +449,75 @@ export function SubwayDemo() {
           <dl className="rule-top rule-bottom grid grid-cols-2 gap-5 py-5">
             <Metric
               label="Arrivals inferred"
-              value={String(snapshot?.metrics.arrivals ?? 0)}
-              note={`${snapshot?.discarded ?? 0} vanished early, dropped`}
+              value={String(view.arrivals.length)}
+              /* Line-wide, because that is the figure that shows the thing
+                 working: it climbs every poll. The platform being measured
+                 gets a handful an hour, which is a fact about the L rather
+                 than about the pipeline. */
+              note={`across the L · ${view.discarded} dropped as early`}
             />
             <Metric
               label="Mean headway"
-              value={`${(snapshot?.metrics.meanHeadway ?? 0).toFixed(1)} min`}
-              note="between consecutive trains"
+              value={
+                metrics.meanHeadway
+                  ? `${metrics.meanHeadway.toFixed(1)} min`
+                  : "—"
+              }
+              note={`${metrics.arrivals} here, ${metrics.headways} gap${
+                metrics.headways === 1 ? "" : "s"
+              }`}
             />
             <Metric
               label="Excess wait"
-              value={`${(snapshot?.metrics.excessWait ?? 0).toFixed(2)} min`}
-              note="beyond the timetable"
+              value={
+                metrics.excessWait !== null
+                  ? `${metrics.excessWait.toFixed(2)} min`
+                  : "—"
+              }
+              note="beyond an even service"
             />
             <Metric
-              label="Inference error"
-              value={`${Math.round(snapshot?.metrics.meanError ?? 0)}s`}
-              note={`worst ${Math.round(snapshot?.metrics.worstError ?? 0)}s`}
+              label="Watching since"
+              value={view.watchingSince ? clock(view.watchingSince) : "—"}
+              note={`${view.polls} poll${view.polls === 1 ? "" : "s"}`}
             />
           </dl>
+
+          {metrics.headways === 0 ? (
+            <p className="label-mono">
+              A headway needs two trains to have arrived at{" "}
+              {stationName(focus)} while this page was open. Leave it running,
+              or pick a busier platform.
+            </p>
+          ) : null}
 
           <div>
             <p className="label-mono mb-2">Most recent inferred arrivals</p>
             <ul className="flex list-none flex-col p-0">
-              {(snapshot?.recent ?? []).map((arrival, i) => (
+              {recent.map((arrival) => (
                 <li
-                  key={`${arrival.trainId}-${arrival.station}-${i}`}
-                  className="rule-bottom label-mono flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2 last:border-b-0"
+                  key={`${arrival.tripId}-${arrival.stop}-${arrival.at}`}
+                  className="rule-bottom label-mono flex items-baseline justify-between gap-4 py-2 last:border-b-0"
                 >
-                  <span className="text-signal">{arrival.trainId}</span>
-                  <span className="max-w-[12rem] flex-1 truncate">
-                    {L_LINE[arrival.station].name}
+                  <span className="text-signal truncate">{arrival.tripId}</span>
+                  <span className="text-steel min-w-0 flex-1 truncate">
+                    {stationName(arrival.stop)}
                   </span>
-                  <span data-numeric>{clock(arrival.inferredAt)}</span>
-                  <span data-numeric className="text-steel">
-                    {arrival.errorSeconds >= 0 ? "+" : ""}
-                    {Math.round(arrival.errorSeconds)}s
-                  </span>
+                  <span data-numeric>{clock(arrival.at)}</span>
                 </li>
               ))}
-              {snapshot && snapshot.recent.length === 0 ? (
+              {recent.length === 0 ? (
                 <li className="label-mono py-2">
-                  Waiting for the first arrival to vanish from the feed…
+                  none yet — an arrival is a row disappearing, so it takes two
+                  polls to see one
                 </li>
               ) : null}
             </ul>
+            <p className="label-mono mt-3">
+              A prediction that vanishes while still more than {GRACE_SECONDS}s
+              in the future is a cancellation or a re-route, not an arrival, and
+              is dropped.
+            </p>
           </div>
         </section>
       </div>
@@ -412,6 +525,15 @@ export function SubwayDemo() {
   );
 }
 
+/**
+ * One figure in the panel.
+ *
+ * The note is a second `<dd>` rather than a `<p>`, which looks like a detail
+ * and is not: a definition list may only contain `dt`/`dd` groups, and a
+ * paragraph inside one is a real accessibility failure that axe catches. A
+ * `dt` is allowed as many `dd`s as it likes, so the caption is simply another
+ * description of the same term.
+ */
 function Metric({
   label,
   value,

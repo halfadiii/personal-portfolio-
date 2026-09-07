@@ -914,18 +914,25 @@
   fill: var(--steel);
 }
 
+.strip-train:not([data-late="off"]) {
+  fill: none;
+  stroke: var(--line-orange-on-void);
+  stroke-width: 1.5;
+}
+
+/*
+   Declared after `late` on purpose. A train can be both followed and late, and
+   when it is, the two rules meet on `fill` — so this one has to win it, or the
+   most important mark on the diagram becomes indistinguishable from every
+   other late train. It keeps the orange stroke and takes the fill back, which
+   reads correctly as both things at once.
+*/
 .strip-train:not([data-watched="off"]) {
   fill: var(--signal);
   /* The followed train is the subject; give it a little more of the rail. */
   transform: scaleY(1.35);
   transform-box: fill-box;
   transform-origin: center;
-}
-
-.strip-train:not([data-late="off"]) {
-  fill: none;
-  stroke: var(--line-orange-on-void);
-  stroke-width: 1.5;
 }
 
 .strip-stem line {

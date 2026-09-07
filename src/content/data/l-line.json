@@ -1,0 +1,140 @@
+{
+ "source": {
+  "from": "public/data/subway-map.json",
+  "note": "Cumulative distance along the route in the map's world units. Ratios are what matter; they place the ticks on the strip diagram.",
+  "generated": "2026-09-07"
+ },
+ "directions": {
+  "N": {
+   "label": "8 Av",
+   "toward": "8 Av"
+  },
+  "S": {
+   "label": "Canarsie",
+   "toward": "Canarsie–Rockaway Pkwy"
+  }
+ },
+ "length": 43.356,
+ "stations": [
+  {
+   "id": "L01",
+   "name": "8 Av",
+   "at": 0
+  },
+  {
+   "id": "L02",
+   "name": "6 Av",
+   "at": 1.545
+  },
+  {
+   "id": "L03",
+   "name": "14 St-Union Sq",
+   "at": 3.159
+  },
+  {
+   "id": "L05",
+   "name": "3 Av",
+   "at": 4.387
+  },
+  {
+   "id": "L06",
+   "name": "1 Av",
+   "at": 5.586
+  },
+  {
+   "id": "L08",
+   "name": "Bedford Av",
+   "at": 12.72
+  },
+  {
+   "id": "L10",
+   "name": "Lorimer St",
+   "at": 14.552
+  },
+  {
+   "id": "L11",
+   "name": "Graham Av",
+   "at": 16.009
+  },
+  {
+   "id": "L12",
+   "name": "Grand St",
+   "at": 17.141
+  },
+  {
+   "id": "L13",
+   "name": "Montrose Av",
+   "at": 18.442
+  },
+  {
+   "id": "L14",
+   "name": "Morgan Av",
+   "at": 20.078
+  },
+  {
+   "id": "L15",
+   "name": "Jefferson St",
+   "at": 22.467
+  },
+  {
+   "id": "L16",
+   "name": "DeKalb Av",
+   "at": 23.821
+  },
+  {
+   "id": "L17",
+   "name": "Myrtle-Wyckoff Avs",
+   "at": 25.833
+  },
+  {
+   "id": "L19",
+   "name": "Halsey St",
+   "at": 28.008
+  },
+  {
+   "id": "L20",
+   "name": "Wilson Av",
+   "at": 30.109
+  },
+  {
+   "id": "L21",
+   "name": "Bushwick Av-Aberdeen St",
+   "at": 31.955
+  },
+  {
+   "id": "L22",
+   "name": "Broadway Junction",
+   "at": 33.262
+  },
+  {
+   "id": "L24",
+   "name": "Atlantic Av",
+   "at": 34.342
+  },
+  {
+   "id": "L25",
+   "name": "Sutter Av",
+   "at": 36.197
+  },
+  {
+   "id": "L26",
+   "name": "Livonia Av",
+   "at": 37.867
+  },
+  {
+   "id": "L27",
+   "name": "New Lots Av",
+   "at": 39.525
+  },
+  {
+   "id": "L28",
+   "name": "East 105 St",
+   "at": 42.033
+  },
+  {
+   "id": "L29",
+   "name": "Canarsie-Rockaway Pkwy",
+   "at": 43.356
+  }
+ ]
+}
