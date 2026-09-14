@@ -11,6 +11,7 @@ const ROUTES = [
   "/dashboard/bank-marketing",
   "/demo/subway",
   "/demo/print-inspection",
+  "/demo/rag",
   "/this-route-does-not-exist",
 ];
 

@@ -57,11 +57,23 @@ export const projects: Project[] = [
     },
   },
   {
-    slug: "customer-churn",
-    title: "Customer churn prediction",
-    hook: "87% test accuracy on 10K telecom records, surfaced in Power BI.",
-    period: "Jan 2025 – Feb 2025",
-    stack: ["Python", "scikit-learn", "Random Forest", "Power BI"],
+    slug: "fda-agentic-rag",
+    title: "Agentic RAG over FDA filings",
+    hook: "Answers regulatory questions from 116 FDA documents, cites the page, and refuses rather than guess.",
+    // Taken from the project folder: every file in it is dated 12–14 September 2026.
+    period: "Sep 2026",
+    stack: ["Python", "Qdrant", "BM25", "bge-small", "DeepSeek"],
+    detail: [
+      "Audited the corpus before indexing it: 42 of 140 downloaded 510(k) summaries were scanned images with no text, and were excluded rather than indexed empty.",
+      "Searches 1,752 chunks two ways at once, by meaning and by exact keyword, and fuses the rankings, because \"ISO 10993-1\" and \"how is it sterilised\" fail in opposite ways.",
+      "A relevance gate refuses when the retrieved passages do not answer the question, instead of answering from whatever text came closest.",
+      "Every claim cites a numbered source, checked in plain code: a draft citing a source it was never given is thrown away, rewritten once, then refused.",
+    ],
+    live: {
+      href: "/demo/rag",
+      label: "Ask it a question",
+    },
+    repo: "https://github.com/halfadiii/fda-510k-agentic-rag",
   },
   {
     slug: "fake-news-detector",

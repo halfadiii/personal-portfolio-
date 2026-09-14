@@ -4,6 +4,20 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  /*
+   * The RAG demo reads its index from data/rag at request time: the embedding
+   * model, the chunk vectors and the keyword index, about 73 MB. The paths are
+   * built at runtime, which file tracing cannot follow, so they are named here
+   * or the function deploys without them. parity/ is deliberately left out —
+   * it is test evidence, not something the route reads.
+   */
+  outputFileTracingIncludes: {
+    "/api/rag": [
+      "./data/rag/*.json",
+      "./data/rag/*.bin",
+      "./data/rag/vocab.txt",
+    ],
+  },
   images: {
     formats: ["image/avif", "image/webp"],
   },

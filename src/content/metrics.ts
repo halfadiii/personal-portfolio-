@@ -52,12 +52,12 @@ export const projectMetrics: Record<string, ProjectMetric> = {
     to: 95,
     scaleMax: 100,
   },
-  "customer-churn": {
-    kind: "level",
-    label: "Test accuracy on 10K telecom records",
-    unit: "%",
-    value: 87,
-    scaleMax: 100,
+  "fda-agentic-rag": {
+    kind: "count",
+    label: "FDA documents it answers from",
+    unit: "documents",
+    value: 116,
+    note: "97 clearances, 19 guidance",
   },
   "fake-news-detector": {
     kind: "level",

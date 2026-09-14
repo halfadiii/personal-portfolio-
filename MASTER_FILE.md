@@ -180,16 +180,19 @@ npm test             # Playwright: axe on every route + the acceptance checklist
 | `npm run gen:l-line` | Rebuild `l-line.json`: the L's stations in order, with their real spacing, out of the network data |
 | `npm run gen:wait-snapshot` | Rebuild the rainfall regression snapshot |
 | `npm run gen:print-inspection` | Rebuild the print inspection run from the production engine's CSV |
+| `npm run gen:rag-index` | Rebuild `data/rag/` from the Agentic RAG project: chunks, vectors, keyword index, the float16 model, and the Python parity reference (needs that project's Python stack) |
+| `npm run test:rag` | Vitest: the TypeScript retrieval held to the Python reference on 24 questions |
 
 ### Environment variables
 
-Copy `.env.example` to `.env.local`. Three matter in production:
+Copy `.env.example` to `.env.local`. Four matter in production:
 
 | Variable | Effect if missing |
 | --- | --- |
 | `NEXT_PUBLIC_SITE_URL` | Metadata, OG tags and the sitemap fall back to `http://localhost:3000`. Link previews on WhatsApp and LinkedIn break, because `og:image` needs an absolute URL. Set to `https://adityaaryan.in`. |
 | `RESEND_API_KEY` | The contact route returns 503 with "email directly" rather than failing silently. |
 | `CONTACT_FROM` | Same. Format: `Portfolio <hello@example.com>`. |
+| `DEEPSEEK_API_KEY` | `/demo/rag` still retrieves for real, then stops and says answering is switched off. Typed into Vercel by hand; never committed, never pasted into a chat. |
 | `PORTFOLIO_SAMPLE_SNAPSHOT` | Development only. Set to `1` to load a **synthetic** regression fixture. Never set this in production. |
 
 ---
@@ -227,7 +230,8 @@ and it appears on the site.
 
 Set in the Vercel project settings, not in the repo. `.env*` is gitignored. If
 the live site ever shows a broken link preview or the form says "mail is not
-configured", one of the three variables in section 3 is missing.
+configured", one of the variables in section 3 is missing. If the RAG demo
+says answering is switched off, it is `DEEPSEEK_API_KEY`.
 
 ---
 
@@ -254,24 +258,27 @@ portfolio/
         dashboard/bank-marketing/page.tsx
         demo/subway/page.tsx
         demo/print-inspection/page.tsx
+        demo/rag/page.tsx
       resume/               # own chrome: inverted surface, no nav in print
         page.tsx
         PrintButton.tsx
       api/
         contact/route.ts    # Resend, zod-validated, rate limited
         subway/live/route.ts # decodes all eight MTA realtime feeds, server-side
+        rag/route.ts        # the Agentic RAG pipeline, streamed as NDJSON steps
     components/
       motion/               # capability gate, Lenis provider, preloader, handover, idle
       sections/             # Hero, SelectedWork, ScrollTrail, Experience, OffClock, Contact...
       site/                 # header, footer, palette, cursor, MDX, providers, sound
       three/                # every WebGL scene and its helpers
-      viz/                  # MetricMark, PipelineDiagram, RegressionPlot, LineStrip, dashboards
+      viz/                  # MetricMark, PipelineDiagram, RegressionPlot, LineStrip, RagDemo, dashboards
     content/                # typed data, MDX case studies, committed datasets
       data/l-line.json      # the L's stations in order, with real spacing
     lib/                    # fonts, seo, site, sky, snapshot, bank-data, highlight
       subway-map.ts         # network geometry + the original simulated Fleet
       subway-fleet-live.ts  # LiveFleet: real trains placed on that geometry
       subway-live.ts        # the L's stations, train placement, the arrival inference
+      rag/                  # server-only: tokenizer, bge-small encoder, hybrid search, answer loop, parity test
     stores/ui.ts            # zustand: sound on/off, palette open, cursor label
     styles/tokens.css       # the design tokens
     fonts/                  # subset woff2 + the unsubset sources
@@ -280,6 +287,7 @@ portfolio/
     media/                  # card art + the four Earth maps
     data/                   # bank-marketing.bin (844 KB), subway-map.json
     sound/                  # two synthesised UI ticks + the 40s track
+  data/rag/                 # the RAG index, read at request time (~73 MB; see section 14)
   scripts/                  # data builders, measurement harnesses, content check
   tests/                    # a11y.spec.ts, acceptance.spec.ts
 ```
@@ -300,6 +308,11 @@ Assigned once and not mixed:
 - **`gtfs-realtime-bindings`** decodes the MTA's protobuf, and only ever on the
   server, inside `api/subway/live`. It never reaches the client bundle: the
   browser is handed JSON and never learns what a protobuf is.
+- **No embedding library.** The RAG demo embeds questions with a hand-written
+  BERT forward pass in `src/lib/rag/encoder.ts`, not transformers.js. The ONNX
+  runtime that would do it is a ~296 MB native package whose Linux binary could
+  not be exercised on the Windows machine this was built on. Plain TypeScript
+  means the code the parity test runs is exactly the code Vercel runs.
 - **Zustand** owns UI state (sound, palette, cursor label).
 - **Radix** owns the dialog primitives. Deliberately *not* the accordion; see
   section 16.
@@ -388,6 +401,24 @@ pipeline's whole problem in one picture. It replaced a 3D view; see section 18.
 The EagleEyes ticket press running: tickets seven across and three deep,
 replaying 2,315 real camera-frame verdicts from the production vision engine.
 
+### `/demo/rag`
+
+The Agentic RAG project, answering live. A question box and five suggested
+questions, one of them out of scope on purpose (wool), because watching it
+refuse is the demo. The route streams the pipeline's steps and the page renders
+each as it lands: the five retrieved passages with where the meaning search and
+the keyword search each ranked them (and the passage text, behind a
+disclosure), the relevance gate's one-word verdict, every draft with the
+citation check's verdict on it — a failed draft is struck through rather than
+hidden — and the final answer with its `[S1]` tags linked back to the passages
+and to the FDA PDF at that page. Below it: the five steps, the parity figures,
+and four stated limitations (no evaluation set yet; the gate is a model's
+judgement; 42 scanned clearances excluded; not regulatory advice).
+
+On load it calls `GET /api/rag`, which decodes the index, so a cold start is
+paid before anyone asks. Without `DEEPSEEK_API_KEY` it says answering is
+switched off and questions stop after retrieval — which is still real.
+
 ### `/about`
 
 Three paragraphs, education with coursework, certifications, and three lines
@@ -414,6 +445,22 @@ edge answers almost every request, so the MTA is asked about three times a
 minute whether one person is watching or a thousand. It returns positions and
 predictions and nothing derived — the arrivals, headways and excess wait are
 inferred in the browser, because watching them being made is the point.
+
+### `/api/rag`
+
+`GET` loads the index and reports readiness and whether answering is
+configured. `POST {question}` validates (at most 300 characters), rate limits
+(10 per ten minutes per address, per-instance memory), and returns
+`application/x-ndjson`: one `retrieval` event, then `gate`, a `draft` per
+attempt, and a `final` carrying the outcome (`answered`, `refused`,
+`unavailable`), attempts, tokens across every model call, an approximate cost
+at DeepSeek V3 list prices, and latency. `maxDuration = 60`.
+
+Everything up to the gate runs inside the function with no network: the
+question is tokenised and embedded in TypeScript, scored against 1,752 stored
+vectors and the exported BM25 postings, and fused with RRF. Only the gate and
+the drafts call DeepSeek. The prompts, the citation regex, the order of the
+checks and the single retry are `answer.py`'s, unchanged.
 
 ### `/api/contact`
 
@@ -492,12 +539,15 @@ what the five bullets name, because merging the entries did not un-learn GCP,
 Airflow or dbt, and he asked for them kept.
 
 **Projects: seven.** NYC subway reliability pipeline (featured, has a live
-demo, and the only one with a public repo:
+demo, and a public repo:
 `github.com/halfadiii/nyc-subway-reliability`, rendered as a secondary text
 link beside the demo button rather than as a second button — somebody who wants
 to read source goes looking, somebody who does not should not step over it), Bank marketing strategy (Jan 2025, dated from its own GitHub history:
 six commits, 11 to 17 January 2025; has a live dashboard), AI print inspection
-system (has a live demo), Customer churn prediction, Real-time fake news
+system (has a live demo), Agentic RAG over FDA filings (Sep 2026, dated from
+the project folder; has a live demo and a public repo,
+`github.com/halfadiii/fda-510k-agentic-rag`; it replaced Customer churn
+prediction on 2026-09-14, at his request), Real-time fake news
 detector, Marketing campaign segmentation, Mineral mapping and classification.
 
 **Skills: five groups.** Languages · Analytics & reporting · Statistical
@@ -1182,6 +1232,7 @@ depends on a live warehouse or an API being awake.
 | `gen:wait-snapshot` | MTA Customer Journey-Focused Metrics + Central Park hourly rainfall (Open-Meteo) | `src/content/data/subway-wait-snapshot.json` |
 | `gen:print-inspection` | The EagleEyes production run: `visualizer_results.csv` + `rules.json` | `src/content/data/print-inspection.json` |
 | `gen:earth` | NASA Blue Marble Next Generation + Black Marble masters | `public/media/earth/{day,night,cloud,mask}.webp` |
+| `gen:rag-index` | The Agentic RAG project's own built artifacts (`chunks.json`, `bm25.pkl`, the Qdrant collection) + the cached bge-small weights | `data/rag/`: chunks, vectors, BM25 internals, sources, vocab, the model as two float16 files, and `parity/python-reference.json` |
 
 ### The bank marketing rebuild
 
@@ -1192,6 +1243,36 @@ proportion to the known split, `poutcome` folded into a single other category).
 Normalised to third normal form and loaded into SQLite as a main table joined to
 a previous-outcome table, so the transitive dependency on `poutcome` was removed
 rather than tolerated. Stratified 80/20 split. Needs pandas, scikit-learn, scipy.
+
+### The RAG index, and why the demo is a port
+
+The Agentic RAG project searches with sentence-transformers on PyTorch and an
+embedded Qdrant database. Neither fits in a Vercel function, so `/api/rag` runs
+a TypeScript port of the query path (`src/lib/rag/`): a WordPiece tokenizer and
+a bge-small-en-v1.5 forward pass written out by hand, exact dot-product search
+over the stored vectors, rank_bm25's Okapi scoring over exported postings, and
+RRF with Python's tie-breaking — dict insertion order and a stable sort. Ties
+are common in RRF, and they decide which five passages the model sees.
+
+`gen:rag-index` exports the project's *built* artifacts rather than rebuilding
+them, and runs the project's real `Retriever` over 24 fixed questions to write
+`data/rag/parity/python-reference.json`. `npm run test:rag` holds the port to
+it. Measured 2026-09-14:
+
+| Check | Result |
+| --- | --- |
+| Token ids, 24 questions + 300 corpus chunks | identical |
+| Lowest cosine to sentence-transformers' vectors | 0.99999997 |
+| Top 30 by meaning and by keyword, 24 questions | identical, in order |
+| Top 5 in dense, keyword and hybrid modes | identical |
+| Embedding one question | median 424 ms, max 584 ms |
+
+The weights ship as float16, in two files (44.4 and 22.5 MB, each under
+GitHub's 50 MB warning). Chosen by measurement: float32 (133 MB) and float16
+(67 MB) both gave identical rankings on 24 of 24 questions; int8 per row
+(34 MB) changed the top 30 on 23 of 24 and a top five on one.
+`data/rag/parity/` is test evidence, and is left out of the function's file
+tracing in `next.config.ts` on purpose.
 
 ### The rainfall regression, and the null result
 
@@ -1818,10 +1899,15 @@ the only way to know that was `curl -I` against the deployed site. Local
    Adding a `url` to an entry turns it into a link.
 6. **The résumé PDF disagrees with the site on two job titles.** By his
    instruction. The PDF is his to reissue.
+7. **`DEEPSEEK_API_KEY` in Vercel.** Until it is set, `/demo/rag` retrieves
+   and then says answering is switched off. Vercel → project → Settings →
+   Environment Variables → Production, then redeploy. The key is prepaid, so
+   the worst case of abuse is its balance; the route's rate limit is a speed
+   bump, not a wall.
 
 ### Technical, and fine as they are
 
-7. **Both halves of `/demo/subway` are live**, through `/api/subway/live`: the
+8. **Both halves of `/demo/subway` are live**, through `/api/subway/live`: the
    3D network map places ~490 real trains, and the strip runs the inference on
    the L. Nothing on that page is simulated any more.
 
@@ -1831,20 +1917,25 @@ the only way to know that was `curl -I` against the deployed site. Local
    accumulate only while a visitor has the page open, so a headway at one
    platform can take a few minutes to appear. That is honest rather than
    ideal; the alternative is server-side history, which needs a store.
-8. **The rate limit is per-instance in-process memory.** Enough for a
+9. **The rate limits (contact, RAG) are per-instance in-process memory.** Enough for a
    single-origin portfolio. A multi-region deployment should swap the map for a
    shared store (Upstash, Vercel KV); the call signature was designed not to
    change if that happens.
-9. **`THREE.Clock` deprecation notice** on desktop. From inside fiber. Nothing to
+10. **`THREE.Clock` deprecation notice** on desktop. From inside fiber. Nothing to
    change here.
-10. **The moon is a moon, not the Moon.** The maria are in plausible places, not
+11. **The moon is a moon, not the Moon.** The maria are in plausible places, not
     their places. The phase and the lighting are real.
-11. **The four "measured outcome" metric fragments in the hero `Constellation`**
+12. **The four "measured outcome" metric fragments in the hero `Constellation`**
     are only shown in the no-JS / reduced-motion fallback. Whether they should
     stay is an open question that was raised and not resolved.
-12. **The mono key-measure caption lines on the work cards.** Removing them was
+13. **The mono key-measure caption lines on the work cards.** Removing them was
     offered alongside removing the charts; the charts were kept, and this was
     never decided.
+14. **The RAG function carries its whole index**, about 73 MB, most of it
+    the model. A cold start decodes it, and the page's readiness call pays
+    that before a question is asked. There is no evaluation set yet: the demo
+    proves every citation points at a passage the model was given, not that
+    the answer reads that passage correctly.
 
 ---
 

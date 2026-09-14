@@ -15,6 +15,7 @@
     "check:content:strict": "node scripts/check-content.mjs --strict",
     "test": "playwright test",
     "test:a11y": "playwright test tests/a11y.spec.ts",
+    "test:rag": "vitest run src/lib/rag/parity.test.ts",
     "shots": "node scripts/shoot.mjs",
     "gen:sounds": "node scripts/make-ui-sounds.mjs",
     "gen:earth": "node scripts/build-earth-maps.mjs",
@@ -27,6 +28,7 @@
     "gen:l-line": "node scripts/build-l-line.mjs",
     "gen:wait-snapshot": "python scripts/build-wait-snapshot.py",
     "gen:print-inspection": "python scripts/build-print-inspection.py",
+    "gen:rag-index": "python scripts/build-rag-index.py",
     "audit": "node scripts/audit.mjs"
   },
   "dependencies": {
