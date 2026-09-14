@@ -1130,19 +1130,21 @@ engine to read.
 | Lighthouse, desktop | **100 / 100 / 100 / 100** |
 | CLS < 0.02 | **0.0004** measured, **0** as Lighthouse scores it |
 | LCP < 2.0s | **0.70s** under 1.6 Mbps / 150ms RTT / 4× CPU |
-| Initial JS ≤ 180 KB gz | **169 KB** on `/` at the time of that measurement; **183 KB** after the relay landed, and unchanged since |
-| Zero axe violations | 40 Playwright tests pass, desktop and mobile |
+| Initial JS ≤ 180 KB gz | **169 KB** on `/` at the time of that measurement; **183 KB** after the relay landed; **184 KB** since the Agentic RAG project replaced churn on 09-14, because `SceneMount` renders each project's `detail` bullets in the home bundle and churn had none |
+| Zero axe violations | 42 Playwright tests pass, desktop and mobile |
 
 Per-route first load, measured on the current build:
 
 | Route | Page | First load |
 | --- | --- | --- |
-| `/` | 60.8 kB | **183 kB** |
+| `/` | 61.3 kB | **184 kB** |
 | `/about` | 179 B | 112 kB |
 | `/dashboard/bank-marketing` | 1.48 kB | 108 kB |
 | `/demo/print-inspection` | 9.06 kB | 124 kB |
+| `/demo/rag` | 4.41 kB | 119 kB |
 | `/demo/subway` | 1.54 kB | 108 kB |
 | `/resume` | 386 B | 107 kB |
+| `/api/rag` | 139 B | 103 kB, plus ~73 MB of index traced into the function |
 | `/work/[slug]` | 3.04 kB | 109 kB |
 
 `/demo/subway` is worth a note: it carries two live views and a 3D map for
@@ -1668,6 +1670,47 @@ and the map sat empty for thirty seconds — intermittently. It presented as
 "0 trains" beside a caption reporting 493 placed, and the two readings
 disagreeing is what gave it away.
 
+### Phase 7: a new project, running live (09-14)
+
+**`7fbc561` Replace the churn card with a live Agentic RAG demo.** At his
+request, Customer churn prediction left the work rail and the Agentic RAG
+project took its place, with a public repo created for it
+(`github.com/halfadiii/fda-510k-agentic-rag`, first commit `373d7fd`) and
+`/demo/rag`. Sections 6, 7 and 14 carry the detail. The decisions that were
+not obvious:
+
+- **A port, not a proxy to Python.** There was nowhere to host the Python,
+  and the ready-made JavaScript runtime for the model was ruled out by
+  measurement rather than taste: `onnxruntime-node` unpacks to 296 MB, and its
+  Linux binary cannot run on the machine this was built on, so nothing about
+  it could be tested before it deployed. The encoder was written out instead.
+- **Parity before features.** Export from the Python project's built
+  artifacts and its real `Retriever`, and do not trust the port until it
+  reproduces them. It passed 7 of 7 on the first run.
+- **Weights chosen by ranking, not by size.** Section 14.
+
+Measured end to end on a local production build with the real key, six
+questions: the answered ones took 2.9–3.5 s and cost about $0.001 each; wool
+was refused at the gate in 1.6 s for $0.0004; embedding a question took
+450–760 ms. An empty question, a 301-character one and a non-JSON body got
+400, 413 and 400.
+
+Two things the live run showed that reading the code would not have:
+
+- The biocompatibility question, the one `answer.py` was built around,
+  **declines**. Four of the five passages it retrieves are manufacturers'
+  reports of their own tests, and the model says none of them states what FDA
+  expects. It came out of the suggested questions, because a first click
+  that refuses reads as broken, and went onto the page as a stated limitation.
+- At temperature 0 the silver-dressings answer still differed between two
+  runs, and one version put `INSUFFICIENT:` in the middle of an otherwise
+  cited answer. The Python only checks whether a reply *starts* with it, so
+  that answer is served, by the Python and by the port alike. Left as the
+  project's behaviour rather than quietly fixed in the port; the place to fix
+  it is `answer.py`.
+
+Vercel reported the deploy of `7fbc561` as successful through GitHub's commit status, checked there rather than by polling the live site.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -1850,6 +1893,20 @@ you have not looked at.** Nothing in the source was wrong to read; the value was
 right there. It was discarded somewhere between the handler and the wire, and
 the only way to know that was `curl -I` against the deployed site. Local
 `next start` does not model the edge at all.
+
+### A hidden label that widened the page
+
+The RAG demo's passage table scrolls inside its own container, and still, at
+320px, the page came out 84px too wide after a question. A probe for elements
+past the viewport found only the fixed background canvas, which had resized to
+the widened window: a symptom posing as the cause. A probe for text spilling
+out of its box found nothing. What found it was bisection, hiding each child
+from `<body>` down and descending into whichever one made the overflow vanish,
+which ended at the table body. The `sr-only` text inside each page link is
+absolutely positioned, and a scroll container that is not itself positioned
+does not contain an absolute descendant, so that invisible text was laid out
+against the page. The fix was `relative` on the scroller. The general version:
+`overflow: auto` without a `position` only contains in-flow content.
 
 ### The measurement lessons
 
