@@ -5,8 +5,10 @@ export const profile: Profile = {
   /* Title case, not the sentence case the rest of the site uses. This one is a
      job title rather than a sentence: it is the browser tab, the link preview
      card, the line under his name and the jobTitle in the structured data, and
-     in every one of those it is a label. */
-  role: "Data Analyst / Analytics Engineer",
+     in every one of those it is a label. Both halves of the work since
+     2026-09-15, at his request: the preview card should say AI/ML as well as
+     analytics. */
+  role: "AI/ML & Analytics Engineer",
   location: "New York City, NY",
   email: "adityaaryan541@gmail.com",
   phone: "+1 (716) 697-7737",
@@ -18,7 +20,7 @@ export const profile: Profile = {
   // the meta description and the schema.org description, where a sentence
   // starting "Build governed pipelines" reads as an instruction.
   positioning:
-    "Analytics professional with a Master's in Data Science and 3+ years across BI and data engineering. Builds governed pipelines in dbt, BigQuery, and GCP, then turns them into Power BI and SQL reporting leadership acts on. Drove a 65% rise in dashboard adoption, cut reporting cycles 40%, and lifted source reliability to 95%.",
+    "AI/ML and analytics engineer with a Master's in Data Science and 3+ years across machine learning, data engineering, and BI. Ships computer vision and NLP models to production, including a YOLOv8 inspection model on edge hardware at 84ms, and builds the governed dbt and BigQuery pipelines and Power BI reporting leadership acts on.",
   headlineMetrics: [
     { value: "1.2M+", label: "transaction records analysed" },
     { value: "65%", label: "rise in dashboard adoption" },

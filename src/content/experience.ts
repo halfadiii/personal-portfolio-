@@ -1,80 +1,67 @@
 import type { Role } from "./types";
 
 /**
- * Three roles, matching the résumé at /aditya-aryan-resume.pdf.
+ * Three roles, each carrying both halves of the work.
  *
- * Google was carried here as three separate Mumbai entries — report analyst,
- * data operations analyst, then reporting specialist — covering Jun 2022 to
- * Mar 2024. The résumé states that span as one remote role, and Aditya
- * confirmed the résumé on 2026-09-05. A visitor can read this page and open the
- * PDF in the same minute, so the two cannot disagree about where he worked.
+ * Aditya keeps two résumés: a data and analytics one (the PDF served at
+ * /aditya-aryan-resume.pdf) and an AI/ML engineer one. On 2026-09-15 he asked
+ * for this section to hold the essence of both, and not to get longer for it.
+ * So each role has four bullets where it used to have five, drawn from the two
+ * résumés' own lines, and a title naming both kinds of work.
  *
- * Bullets are the résumé's, in this file's house style: `%` rather than the
- * word, since every other bullet on the site is written that way. Titles are
- * sentence case for the same reason — every project title and section heading
- * on the site is, and three roles in title case would sit oddly above them.
+ * That supersedes the 2026-09-05 note that two titles here deliberately
+ * differed from the PDF. They now differ from both PDFs, on purpose, because
+ * neither single résumé describes the combined role.
  *
- * Two titles are deliberately not the résumé's, on Aditya's instruction as of
- * 2026-09-05: Nissha reads "Data engineer" here against the PDF's "Data
- * Analytics & Computer Vision Capstone", and Google reads "analyst" against its
- * "specialist". He knows; the PDF is his to reissue.
+ * Google was carried here as three separate Mumbai entries until 2026-09-05;
+ * the résumés state that span as one remote role, and he confirmed it.
+ *
+ * House style: `%` rather than the word, and sentence-case titles, like every
+ * other heading on the site.
  */
 export const experience: Role[] = [
   {
     org: "Nissha Medical Technologies",
-    title: "Data engineer",
+    title: "Machine learning & data engineer, computer vision",
     location: "Buffalo, NY",
     start: "2025-05",
     end: "2025-12",
     bullets: [
-      "Designed automated testing routines in Python with pandas and NumPy, lowering manual production review effort by 35% across validation phases.",
-      "Investigated 4,500+ manufacturing logs through EDA and statistical analysis, raising variance tracking consistency by 27%.",
-      "Engineered anomaly-filtering logic with feature engineering and model checks, removing recurring calculation faults.",
-      "Implemented monitoring triggers on yield variables, shortening factory inspection cycles by 31% through real-time streaming.",
-      "Validated preprocessing routines under Git version control, decreasing false-positive anomaly flags by 18%.",
+      "Built and trained a YOLOv8 object-detection model in PyTorch for automated print-defect inspection, identifying 99.9% of defects across multiple datasets.",
+      "Exported it to ONNX and TensorRT on an NVIDIA Jetson edge device, cutting inference from ~300ms to 84ms, and served it with FastAPI and Docker for real-time inspection.",
+      "Engineered a multi-stage quality gate in Python and OpenCV with visibility, density, and layout checks, so every pass/fail decision is auditable.",
+      "Ran EDA and error audits on 4,500+ manufacturing logs with pandas and NumPy, feeding feature-engineering changes that raised consistency 27% and cut false-positive flags 18%.",
     ],
-    stack: ["Python", "pandas", "NumPy", "OpenCV", "Git"],
+    stack: ["PyTorch", "YOLOv8", "OpenCV", "ONNX", "TensorRT", "FastAPI", "Docker", "pandas"],
   },
   {
     org: "Constituents AI & Technology",
-    title: "Data analyst, business operations & reporting",
+    title: "Machine learning engineer & data analyst",
     location: "Remote",
     start: "2024-03",
     end: "2024-07",
     bullets: [
-      "Developed 10+ Power BI dashboards with DAX and Power Query, merging marketing and operational clusters and expanding self-service usage by 65%.",
-      "Mined 1.2M+ transaction records via SQL on PostgreSQL, running cohort and retention analysis that lifted conversions by 12%.",
-      "Modeled subscriber shifts through time-series forecasting, lifting quarterly forecast accuracy by 20%.",
-      "Standardized metric definitions and ran A/B testing with segmentation logic, cutting review prep timelines 40% and entry errors 90%.",
-      "Facilitated requirements gathering with stakeholders, aligning raw operational metrics against structured RDBMS schemas.",
+      "Developed a sentiment-analysis NLP model in scikit-learn on 1.2M+ customer reviews, surfacing the churn and satisfaction drivers leadership used for retention.",
+      "Forecasted subscriber demand with time-series models, lifting quarterly forecast accuracy 20% across product lines.",
+      "Mined cohort and retention patterns in SQL on PostgreSQL and designed A/B tests with segmentation logic, lifting conversion 12% in targeted offers.",
+      "Built 10+ Power BI dashboards with DAX and Power Query, expanding self-service usage 65% across marketing and operations.",
     ],
-    stack: ["Power BI", "DAX", "Power Query", "PostgreSQL", "SQL"],
+    stack: ["Python", "scikit-learn", "NLP", "Prophet", "SQL", "PostgreSQL", "Power BI", "Airflow"],
   },
   {
     org: "Google",
-    title: "Data analytics & reporting analyst",
+    title: "Data engineer, analytics & ML pipelines",
     location: "Remote",
     start: "2022-06",
     end: "2024-03",
     bullets: [
-      "Consolidated reporting assets in Power BI and Excel across 10+ business units, shrinking manual spreadsheet work by 40% for leadership reviews.",
-      "Optimized BigQuery and Spark transformation jobs feeding daily reporting, tuning partitioned query logic to stabilize production loads across dozens of migrated finance sources.",
-      "Automated reconciliation checks enforcing data quality and governance across warehouse layers, flagging schema drift early to protect reporting integrity through platform transitions.",
-      "Translated raw operational feeds into governed warehouse tables using dimensional modeling, documenting column-level lineage back to validated upstream finance sources.",
-      "Produced standardized reporting packages from reconciled MySQL datasets, giving stakeholders consistent month-over-month figures and cutting historical gaps 95%.",
+      "Translated operational data into governed BigQuery tables and versioned feature datasets with dbt, Spark, and dimensional modeling, feeding both reporting and model training.",
+      "Optimized BigQuery and Spark ETL jobs in Airflow with partitioning, clustering, and query rewrites to absorb 5x+ volume growth.",
+      "Automated reconciliation and drift checks with PyTest and Great Expectations, catching schema and distribution changes before they reached reports or models.",
+      "Consolidated KPI dashboards across 10+ business units, cutting manual spreadsheet reporting 40%, and published validated MySQL data as API-accessible packages that closed historical gaps 95%.",
     ],
-    // The union of what the three merged roles ran on, not just what these five
-    // bullets happen to name. Merging the entries did not un-learn GCP, Airflow
-    // or dbt, and Aditya asked for them kept.
-    stack: [
-      "GCP",
-      "BigQuery",
-      "dbt",
-      "Airflow",
-      "Spark",
-      "Power BI",
-      "Excel",
-      "MySQL",
-    ],
+    // Kept broad: merging the three earlier entries did not un-learn GCP,
+    // Airflow or dbt, and Aditya asked for them kept.
+    stack: ["GCP", "BigQuery", "dbt", "Airflow", "Spark", "Python", "Power BI", "MySQL"],
   },
 ];

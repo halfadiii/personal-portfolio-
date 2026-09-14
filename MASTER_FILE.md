@@ -497,7 +497,9 @@ to change what it says, edit a file in `src/content/`.
 
 ### The current content, verbatim
 
-**Profile.** Role: `Data Analyst / Analytics Engineer` (title case, deliberately,
+**Profile.** Role: `AI/ML & Analytics Engineer` since 2026-09-15, at his
+request so the link preview names both kinds of work; it was
+`Data Analyst / Analytics Engineer` (title case, deliberately,
 because it is a label in four places: the browser tab, the link-preview card, the
 line under his name, and `jobTitle` in the structured data). Location: New York
 City, NY. Email `adityaaryan541@gmail.com`. Phone `+1 (716) 697-7737`. LinkedIn
@@ -506,11 +508,15 @@ City, NY. Email `adityaaryan541@gmail.com`. Phone `+1 (716) 697-7737`. LinkedIn
 Positioning (also the meta description and the schema.org description, which is
 why it is third person):
 
-> Analytics professional with a Master's in Data Science and 3+ years across BI
-> and data engineering. Builds governed pipelines in dbt, BigQuery, and GCP, then
-> turns them into Power BI and SQL reporting leadership acts on. Drove a 65% rise
-> in dashboard adoption, cut reporting cycles 40%, and lifted source reliability
-> to 95%.
+> AI/ML and analytics engineer with a Master's in Data Science and 3+ years
+> across machine learning, data engineering, and BI. Ships computer vision and
+> NLP models to production, including a YOLOv8 inspection model on edge
+> hardware at 84ms, and builds the governed dbt and BigQuery pipelines and
+> Power BI reporting leadership acts on.
+
+Kept close to the old paragraph's length, because the hero reserves the bottom
+quarter of the constellation for it. The first sentence names both halves on
+its own, since a link preview often truncates after it.
 
 **Education.** MPS, Data Science & Applications, SUNY Buffalo, GPA 3.5,
 2024-08 to 2025-12, Buffalo NY. Coursework: Business Analytics, Data
@@ -519,18 +525,28 @@ BigQuery, Tableau, DAX, Microsoft Fabric.
 
 **Experience: three roles.**
 
-1. **Nissha Medical Technologies** — Data engineer, Buffalo NY, 2025-05 to
-   2025-12. Python/pandas/NumPy/OpenCV/Git.
-2. **Constituents AI & Technology** — Data analyst, business operations &
-   reporting, Remote, 2024-03 to 2024-07. Power BI/DAX/Power Query/
-   PostgreSQL/SQL.
-3. **Google** — Data analytics & reporting analyst, Remote, 2022-06 to 2024-03.
-   GCP/BigQuery/dbt/Airflow/Spark/Power BI/Excel/MySQL.
+1. **Nissha Medical Technologies** — Machine learning & data engineer, computer
+   vision, Buffalo NY, 2025-05 to 2025-12.
+2. **Constituents AI & Technology** — Machine learning engineer & data analyst,
+   Remote, 2024-03 to 2024-07.
+3. **Google** — Data engineer, analytics & ML pipelines, Remote, 2022-06 to
+   2024-03.
 
-Two of those titles deliberately do not match the downloadable PDF: the PDF says
-"Data Analytics & Computer Vision Capstone" for Nissha and "Specialist" for
-Google. **This is not a bug.** It is Aditya's instruction as of 2026-09-05, and
-the PDF is his to reissue. Do not quietly "fix" it back.
+Since 2026-09-15 each role blends his two résumés, the data/analytics one (the
+downloadable PDF) and the AI/ML engineer one, at his request and without
+getting longer: four bullets per role where there were five, drawn from the
+two documents' own lines.
+
+None of the three titles matches either PDF exactly, because neither single
+résumé describes the combined role. **This is not a bug.** It is Aditya's
+instruction, and the PDFs are his to reissue. Do not quietly "fix" it back.
+
+The two résumés disagree in two places, and the site takes the AI/ML one's
+wording for both: Constituents' 1.2M+ records are *customer reviews* there and
+*transaction records* in the data résumé (the home page's headline metric still
+says transaction records), and its A/B work cut *data-collection time* 40% there
+against *review prep timelines* in the data résumé (the site no longer quotes
+that figure). Flagged to him; unresolved.
 
 The Google entry was three separate Mumbai roles here until 2026-09-05. The
 résumé states that span as one remote role, he confirmed the résumé, so it is
