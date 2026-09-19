@@ -92,9 +92,13 @@ export const projects: Project[] = [
       "Modelled three half-yearly What We Watched reports and five years of weekly Top 10 charts — 94 countries, 567,528 rows — as two fact tables at different grains over conformed date, title and region dimensions, exported as a star Power BI loads directly. A weekly rank and a six-month hours total do not reconcile into one table without discarding one of them.",
       "Checked the build against Netflix's own published totals before trusting a single query against it: 95.19, 96.21 and 97.66 billion hours across the three halves.",
       "Series earn three and a half times what films earn per title, and the gap is widening — film titles grew from 8,674 to 9,179 while film hours fell from 24.1 to 23.3 billion. The growth is a wider catalogue, not bigger hits.",
-      "The Gentlemen's second season pulled its own first season back into the Top 10 of 85 of 94 markets in the week it premiered, climbing in 53 of them. A premiere measured on its own undercounts what the release earned.",
+      "The Gentlemen's second season pulled its own first season, all but gone from the charts since 2024, back into the Top 10 of 56 markets in its premiere week and 85 of 94 the week after. A premiere measured on its own undercounts what the release earned.",
       "Two bugs found rather than shipped: keying a title on show_title alone merged two concurrently-charting seasons of the same show into one row, and filtering to the latest week before a LAG() window ran left one row per partition, so the biggest-movers query silently returned nothing.",
     ],
+    live: {
+      href: "/dashboard/netflix-engagement",
+      label: "Open the live dashboard",
+    },
     repo: "https://github.com/halfadiii/netflix-engagement-analytics",
   },
   {

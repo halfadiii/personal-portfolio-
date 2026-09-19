@@ -29,6 +29,7 @@
     "gen:wait-snapshot": "python scripts/build-wait-snapshot.py",
     "gen:print-inspection": "python scripts/build-print-inspection.py",
     "gen:rag-index": "python scripts/build-rag-index.py",
+    "gen:netflix": "python scripts/build-netflix-dashboard.py",
     "audit": "node scripts/audit.mjs"
   },
   "dependencies": {

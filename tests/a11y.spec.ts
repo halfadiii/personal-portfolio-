@@ -9,6 +9,8 @@ const ROUTES = [
   "/work/nyc-subway-reliability",
   "/work/print-inspection-cv",
   "/dashboard/bank-marketing",
+  "/dashboard/netflix-engagement",
+  "/work/streaming-engagement-analytics",
   "/demo/subway",
   "/demo/print-inspection",
   "/demo/rag",
