@@ -104,6 +104,14 @@ export default function NetflixEngagementPage() {
             row in the file. They count towards the totals, which is how Netflix
             reports them, and are left out of every per-title view.
           </Limit>
+          <Limit title="Trailer views run to today, and prove nothing on their own.">
+            YouTube only reports a trailer&rsquo;s total so far, not what it had
+            at release, and a show that becomes a hit sends people back to its
+            trailer. Twenty titles is enough to see whether the two move
+            together, not to measure how much. The counts are fetched live and
+            never stored, because YouTube&rsquo;s terms cap keeping them at 30
+            days.
+          </Limit>
           <Limit title="There are no genres.">
             Content type means series or film, English or not. Netflix
             doesn&rsquo;t publish genre, so answering which genres over-index means

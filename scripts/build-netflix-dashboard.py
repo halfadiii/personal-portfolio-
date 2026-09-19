@@ -231,6 +231,35 @@ def main() -> None:
         "markets": markets,
     }
 
+    # ------------------------------------------------------------ trailers (panel 08)
+    # Which trailer belongs to which title, checked by hand in the source repo.
+    # Only the video ids go into the page; the view counts are fetched live by
+    # /api/netflix/trailers, because YouTube's policies cap storing them at 30
+    # days and require showing current data.
+    trailers = []
+    trailer_map = args.source / "data" / "trailers" / "trailer_map.csv"
+    if trailer_map.exists():
+        tmap = pd.read_csv(trailer_map)
+        chart = g_weekly.groupby("title_id").agg(peak=("weekly_rank", "min"), weeks=("date_key", "nunique"))
+        # Released in 2026H1 only: dim_title keys on (name, type), so two works
+        # that share a name share an id ("War Machine" has two 2026H1 rows).
+        h26 = half[(half.period_label == "2026H1") & (half.release_date >= "2026-01-01")]
+        assert not h26.title_id.isin(tmap.title_id)[h26.title_id.duplicated()].any(), "ambiguous trailer title"
+        h26 = h26.set_index("title_id")
+        for row in tmap.itertuples():
+            trailers.append(
+                {
+                    "title": row.title_name,
+                    "type": row.content_type,
+                    "videoId": row.video_id,
+                    "channel": row.channel,
+                    "hoursM": r(h26.loc[row.title_id, "hours_viewed"] / 1e6, 1),
+                    "released": str(h26.loc[row.title_id, "release_date"]),
+                    "peak": int(chart.loc[row.title_id, "peak"]),
+                    "weeks": int(chart.loc[row.title_id, "weeks"]),
+                }
+            )
+
     payload = {
         "source": {
             "repo": "https://github.com/halfadiii/netflix-engagement-analytics",
@@ -247,6 +276,7 @@ def main() -> None:
         "language": language,
         "countries": countries,
         "premiere": premiere,
+        "trailers": trailers,
     }
     OUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 

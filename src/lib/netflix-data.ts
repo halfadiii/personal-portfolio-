@@ -91,6 +91,29 @@ export type NetflixData = {
     };
     markets: Market[];
   };
+  /**
+   * The 20 hand-matched trailers. Ids only: the view counts are fetched live
+   * by /api/netflix/trailers, never stored, under YouTube's 30-day rule.
+   */
+  trailers: Trailer[];
+};
+
+export type Trailer = {
+  title: string;
+  type: "Show" | "Movie";
+  videoId: string;
+  channel: string;
+  hoursM: number;
+  released: string;
+  peak: number;
+  weeks: number;
+};
+
+export type TrailerViews = {
+  available: boolean;
+  reason?: string;
+  fetchedAt?: string;
+  views?: Record<string, number>;
 };
 
 export const netflix = data as unknown as NetflixData;

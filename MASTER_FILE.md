@@ -186,7 +186,7 @@ npm test             # Playwright: axe on every route + the acceptance checklist
 
 ### Environment variables
 
-Copy `.env.example` to `.env.local`. Four matter in production:
+Copy `.env.example` to `.env.local`. Five matter in production:
 
 | Variable | Effect if missing |
 | --- | --- |
@@ -194,6 +194,7 @@ Copy `.env.example` to `.env.local`. Four matter in production:
 | `RESEND_API_KEY` | The contact route returns 503 with "email directly" rather than failing silently. |
 | `CONTACT_FROM` | Same. Format: `Portfolio <hello@example.com>`. |
 | `DEEPSEEK_API_KEY` | `/demo/rag` still retrieves for real, then stops and says answering is switched off. Typed into Vercel by hand; never committed, never pasted into a chat. |
+| `YOUTUBE_API_KEY` | Panel 08 of `/dashboard/netflix-engagement` says trailer counts are unavailable; the other seven panels are unaffected. YouTube Data API v3, restricted to that API. |
 | `PORTFOLIO_SAMPLE_SNAPSHOT` | Development only. Set to `1` to load a **synthetic** regression fixture. Never set this in production. |
 
 ---
@@ -268,6 +269,7 @@ portfolio/
         contact/route.ts    # Resend, zod-validated, rate limited
         subway/live/route.ts # decodes all eight MTA realtime feeds, server-side
         rag/route.ts        # the Agentic RAG pipeline, streamed as NDJSON steps
+        netflix/trailers/route.ts # live YouTube trailer view counts, never stored
     components/
       motion/               # capability gate, Lenis provider, preloader, handover, idle
       sections/             # Hero, SelectedWork, ScrollTrail, Experience, OffClock, Contact...
@@ -382,6 +384,11 @@ the world's, with a market picker and a full table), and a 94-cell grid of
 *The Gentlemen* Season 1's status in each market the week after Season 2
 premiered. Recharts, lazy-loaded; the page itself is 1.48 kB.
 
+Panel 08 (09-19) sets YouTube trailer views against Netflix hours for 20
+hand-matched titles from 2026H1, 10 series and 10 films, on log axes, with a
+table linking every trailer. The counts come live from `/api/netflix/trailers`
+and are never stored; see that route below. No correlation figure is drawn.
+
 Colour encodes only: film orange, series blue, non-English dashed, and a
 status per market cell whose text colour was chosen by measured contrast
 (black on the blue is 3.51:1 and fails, so those cells use off-white).
@@ -483,6 +490,26 @@ question is tokenised and embedded in TypeScript, scored against 1,752 stored
 vectors and the exported BM25 postings, and fused with RRF. Only the gate and
 the drafts call DeepSeek. The prompts, the citation regex, the order of the
 checks and the single retry are `answer.py`'s, unchanged.
+
+### `/api/netflix/trailers`
+
+Current view counts for the dashboard's 20 trailers: one YouTube Data API v3
+`videos.list` call for all of them (1 quota unit), with the fetch cached for a
+day, so YouTube is asked at most once a day however many people visit. The
+page ships only which trailer belongs to which title (video ids, from the
+engagement repo's hand-checked `data/trailers/trailer_map.csv`).
+
+Two YouTube Developer Policies shaped it: statistics for videos you don't own
+may be stored for at most 30 days (III.E.4.d), and apps must show the most
+recent data (III.E.4.f). A number baked in at build time breaks both within a
+month, so nothing is baked in. A third (III.E.4.h, no new metrics built from
+API data) is why the panel shows raw pairs and no correlation coefficient.
+
+`dynamic = "force-dynamic"`, deliberately. The first version used
+`revalidate = 3600`, which let Next prerender the route at build: a build
+without the key baked "not configured" into the cache, and every build would
+have depended on YouTube answering. Found locally with the key present and the
+route still saying it was absent.
 
 ### `/api/contact`
 
@@ -1803,6 +1830,37 @@ repo, the exam files and a README section were committed; his local
 `test.py` was left out on purpose: it had become a script that deletes the
 scanned 510(k) PDFs from `data/raw`, which is cleanup, not a test.
 
+### Phase 10: trailer views, live (09-19)
+
+At his request, a YouTube layer on the streaming project. The plan he brought
+said: take the premiere and top-mover titles, store view counts in the SQLite
+model, and correlate them with chart performance. Four parts were changed
+before anything was built:
+
+- **A spread, not hits.** Twenty hits cannot show whether trailer interest
+  predicts success. The sample is 10 series and 10 films, released and first
+  charting in 2026H1 (so trailers had similar time to gather views), spaced
+  evenly from the biggest hit to one-week titles.
+- **Hours, not peak rank.** Peak rank has ten values and hundreds of ties;
+  What We Watched hours are continuous and already in the model.
+- **Matched by hand.** Searching "<title> trailer" returned a different film's
+  teaser for *This is I* and only a German clip for *Eat Pray Bark*. Every
+  match was checked; two titles with no real trailer were replaced; each title
+  uses its home-market Netflix channel.
+- **Nothing stored.** YouTube's 30-day rule (III.E.4.d) and freshness rule
+  (III.E.4.f) ruled out committing counts, so the repo holds only the map, the
+  local fetch script deletes rows older than 30 days, and the site fetches live.
+
+Found on the way: **`dim_title` merges different works that share a name and
+type.** "War Machine" has two 2026H1 rows under one id (the 2026 film, 266.8M
+hours, and an older one, 0.9M). The trailer query and the build script join on
+the 2026H1 release window to pick the right one; the model itself is unchanged.
+
+What the panel shows as of 09-19, read as a pattern and not a finding: within
+each type the two tend to rise together (the four most-watched films rank 1-4
+on both), with clear exceptions (*Stranger Things: Tales From '85* has the
+second-largest series trailer and ranks seventh of ten series on hours).
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -2013,6 +2071,29 @@ same exposure, so it was audited the same way on 2026-09-19, after all 8
 charts had drawn: 0 violations at 1280px and at 320px. Any lazy-loaded panel
 needs its axe run after it has loaded.
 
+### Three mistakes from the trailer panel
+
+**An API key printed into a transcript.** Loading `.env` by `source`-ing it in
+a shell executes it: a stray space after `=` turned the key into a command, and
+the shell's "command not found" error echoed the key back. It was regenerated.
+The first regeneration check found the same key still in place (compared by its
+last four characters only), which is why the check exists. Every script since
+reads `.env` as text, trims it, and never prints the value. Never `source` a
+`.env`.
+
+**A route prerendered with no key.** `revalidate` on a route handler with no
+dynamic input lets Next build it statically; the build had no key, so the
+cached response said "not configured" to a server that had one. Now
+`force-dynamic`, with the day-long cache on the YouTube fetch instead.
+
+**A log scale that clamped the most important point.** Recharts' `scale="log"`
+ignored the domain given to it, and Bridgerton, the biggest title in the
+sample, sat on the plot's top edge. Every automated check passed: twenty dots,
+twenty rows, zero axe violations. The screenshot is what showed a missing dot,
+and measuring the dot's y against the plot's top confirmed it. The panel now
+plots log10 of each value on linear axes, and the check asserts that no dot
+touches a plot edge.
+
 ### The measurement lessons
 
 - **Bounding boxes over-report contrast failures.** They count the empty half of
@@ -2066,6 +2147,10 @@ needs its axe run after it has loaded.
    Environment Variables → Production, then redeploy. The key is prepaid, so
    the worst case of abuse is its balance; the route's rate limit is a speed
    bump, not a wall.
+   **`YOUTUBE_API_KEY` needs the same:** add it in the same place, then
+   redeploy. Until then panel 08 of the streaming dashboard says the trailer
+   counts are unavailable. It is a Google Cloud key for YouTube Data API v3;
+   keep it restricted to that one API.
 
 ### Technical, and fine as they are
 

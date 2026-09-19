@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import {
   Area,
@@ -25,6 +25,7 @@ import {
   netflix,
   type Market,
   type MarketStatus,
+  type TrailerViews,
 } from "@/lib/netflix-data";
 import { cn } from "@/lib/utils";
 
@@ -141,7 +142,168 @@ export function NetflixDashboard() {
       <WeeklyTrend />
       <Markets />
       <Premiere />
+      <Trailers />
     </div>
+  );
+}
+
+/**
+ * Trailer views against hours viewed, for 20 hand-matched titles.
+ *
+ * The counts come from /api/netflix/trailers, fetched from YouTube at most once
+ * a day and never stored, because YouTube's policies cap keeping them at 30
+ * days. No correlation figure is drawn: twenty points, cumulative counts and an
+ * arrow that can point either way do not support one, and the same policies
+ * rule out building new metrics from YouTube's data. The chart shows the raw
+ * pairs and lets them speak.
+ */
+function Trailers() {
+  const { trailers } = netflix;
+  const [data, setData] = useState<TrailerViews | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/netflix/trailers")
+      .then((response) => response.json() as Promise<TrailerViews>)
+      .then((result) => alive && setData(result))
+      .catch(() => alive && setData({ available: false, reason: "YouTube could not be reached" }));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const rows = trailers.map((t) => ({ ...t, views: data?.views?.[t.videoId] ?? null }));
+  const plotted = rows.filter((row) => row.views !== null && row.views > 0);
+  /*
+   * Plotted as log10 on linear axes, not with Recharts' log scale. That scale
+   * ignored the domain set on it and clamped the largest point, Bridgerton at
+   * 890M hours, onto the plot's top edge. Measured in the browser, not
+   * guessed: the topmost dot's y was the plot's top y exactly. Taking the
+   * logarithm here keeps the range under our control.
+   */
+  const points = (type: "Show" | "Movie") =>
+    plotted
+      .filter((row) => row.type === type)
+      .map((row) => ({ x: Math.log10(row.views as number), y: Math.log10(row.hoursM), title: row.title }));
+  const logDomain = (values: number[]): [number, number] =>
+    values.length
+      ? [Math.floor(Math.log10(Math.min(...values))), Math.ceil(Math.log10(Math.max(...values)))]
+      : [0, 1];
+  const xDomain = logDomain(plotted.map((row) => row.views as number));
+  const yDomain = logDomain(plotted.map((row) => row.hoursM));
+  const powers = ([lo, hi]: [number, number]) => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+  const compact = (n: number) =>
+    n >= 1e9 ? `${n / 1e9}B` : n >= 1e6 ? `${n / 1e6}M` : n >= 1e3 ? `${n / 1e3}K` : String(n);
+  const fetched = data?.fetchedAt ? formatWeek(data.fetchedAt.slice(0, 10)) : null;
+
+  return (
+    <Panel
+      index="08"
+      title="Trailer views against hours watched"
+      caption={`${trailers.length} titles from ${formatHalf("2026H1")}, ${trailers.filter((t) => t.type === "Show").length} series and ${trailers.filter((t) => t.type === "Movie").length} films, released and first charting in the same half-year so their trailers have had a similar time to gather views, and spread from the biggest hit to titles that spent one week at the bottom of the Top 10. Each trailer was matched by hand to the official Netflix channel for the title's home market. Films and series are kept apart, because film trailers draw far more views at similar viewing levels. Both axes are logarithmic.`}
+    >
+      {data === null ? (
+        <p className="label-mono">Fetching current view counts from YouTube…</p>
+      ) : !data.available ? (
+        <p className="label-mono">
+          Trailer view counts are unavailable right now ({data.reason}). The titles and their Netflix hours are in the
+          table below.
+        </p>
+      ) : (
+        <>
+          <ResponsiveContainer width="100%" height={340}>
+            <ScatterChart margin={{ top: 8, right: 16, bottom: 20, left: 4 }}>
+              <CartesianGrid stroke="var(--hairline)" />
+              <XAxis
+                type="number"
+                dataKey="x"
+                domain={xDomain}
+                ticks={powers(xDomain)}
+                tickFormatter={(v: number) => compact(10 ** v)}
+                tick={AXIS}
+                tickLine={false}
+                axisLine={{ stroke: "var(--hairline)" }}
+                label={{ value: "trailer views on YouTube", position: "insideBottom", offset: -12, ...AXIS }}
+              />
+              <YAxis
+                type="number"
+                dataKey="y"
+                domain={yDomain}
+                ticks={powers(yDomain)}
+                tickFormatter={(v: number) => compact(10 ** v * 1e6)}
+                tick={AXIS}
+                tickLine={false}
+                axisLine={{ stroke: "var(--hairline)" }}
+                width={52}
+                label={{ value: "hours viewed", angle: -90, position: "insideLeft", ...AXIS }}
+              />
+              <ZAxis range={[48, 48]} />
+              <Scatter data={points("Show")} fill={TV} isAnimationActive={false} name="Series" />
+              <Scatter data={points("Movie")} fill={FILM} isAnimationActive={false} name="Films" />
+            </ScatterChart>
+          </ResponsiveContainer>
+          <Key
+            items={[
+              { label: "series", colour: TV },
+              { label: "films", colour: FILM },
+            ]}
+          />
+        </>
+      )}
+
+      <p className="label-mono">
+        Trailer view counts from{" "}
+        <a href="https://www.youtube.com" rel="noreferrer" className="text-signal underline underline-offset-4">
+          YouTube
+        </a>
+        {fetched ? `, fetched ${fetched}` : ""}, refreshed at most daily and never stored. They run to today, not to
+        release day, and a hit sends people back to its trailer, so read this as two things that move together or
+        don&rsquo;t, not as one causing the other.
+      </p>
+
+      <details className="border-hairline border px-4 py-3">
+        <summary className="label-mono cursor-pointer">All {trailers.length} titles and their trailers</summary>
+        <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="Trailer views and Netflix hours for each title, scrollable">
+          <table className="text-small w-full min-w-[34rem] border-collapse text-left">
+            <caption className="sr-only">Each title&rsquo;s trailer views on YouTube beside its Netflix hours and chart run</caption>
+            <thead>
+              <tr className="rule-bottom">
+                <th scope="col" className="label-mono text-signal py-2 pr-3">Title</th>
+                <th scope="col" className="label-mono text-signal py-2 pr-3">Trailer views</th>
+                <th scope="col" className="label-mono text-signal py-2 pr-3">Hours viewed</th>
+                <th scope="col" className="label-mono text-signal py-2 pr-3">Best global rank</th>
+                <th scope="col" className="label-mono text-signal py-2">Weeks in Top 10</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...rows]
+                .sort((a, b) => (a.type === b.type ? b.hoursM - a.hoursM : a.type === "Show" ? -1 : 1))
+                .map((row) => (
+                  <tr key={row.videoId} className="rule-bottom">
+                    <th scope="row" className="label-mono py-1.5 pr-3 font-normal">
+                      <a
+                        href={`https://www.youtube.com/watch?v=${row.videoId}`}
+                        rel="noreferrer"
+                        className="hover:text-signal underline-offset-4 hover:underline"
+                      >
+                        {row.title}
+                        <span className="sr-only">, watch the trailer on YouTube</span>
+                      </a>
+                      <span className="text-steel"> · {row.type === "Show" ? "series" : "film"} · {row.channel}</span>
+                    </th>
+                    <td className="label-mono py-1.5 pr-3" data-numeric>
+                      {row.views === null ? "—" : row.views.toLocaleString()}
+                    </td>
+                    <td className="label-mono py-1.5 pr-3" data-numeric>{row.hoursM.toLocaleString()}M</td>
+                    <td className="label-mono py-1.5 pr-3" data-numeric>#{row.peak}</td>
+                    <td className="label-mono py-1.5" data-numeric>{row.weeks}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </Panel>
   );
 }
 
