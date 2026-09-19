@@ -66,10 +66,11 @@ export const projectMetrics: Record<string, ProjectMetric> = {
     value: 91,
     scaleMax: 100,
   },
-  "marketing-segmentation": {
-    kind: "shortfall",
-    label: "Worst cohort against target ROI",
-    unit: "%",
-    value: 19,
+  "streaming-engagement-analytics": {
+    kind: "level",
+    label: "Markets where a premiere revived its own first season",
+    unit: "",
+    value: 85,
+    scaleMax: 94,
   },
 };

@@ -1,0 +1,137 @@
+---
+title: Streaming engagement analytics
+hook: "567,528 rows of Netflix's own engagement data: total hours keep rising, hours per title keep falling."
+period: Sep 2026
+stack:
+  - Python
+  - SQL
+  - SQLite
+  - Power BI
+summary: >-
+  A star-schema model over Netflix's public engagement disclosures, decomposing
+  streaming hours by content type, time and region — and the two data-quality
+  bugs that had to be found before any of it was true.
+---
+
+## Context
+
+Netflix publishes two things about what people actually watch, and neither
+answers a question on its own.
+
+The first is *What We Watched*, a half-yearly report covering roughly 99% of all
+viewing on the platform: every title, the hours it earned, its runtime, its
+views. It is the real denominator, and it arrives twice a year with no regional
+split and no week-by-week shape.
+
+The second is the weekly Top 10, published every Tuesday for the global chart
+and for 94 individual countries, going back to July 2021. It has the shape and
+the geography the first one lacks, and it stops at ten titles per category —
+and for countries, it carries no hours at all, only rank.
+
+The exercise was to decompose engagement hours into content, time and regional
+drivers using only what is public: the same decomposition a subscriber
+analytics team runs internally, done from the outside.
+
+## What was hard
+
+**The two sources do not share a grain.** One is title-by-half-year with real
+hours; the other is title-by-week-by-country with a rank. Flattening them into a
+single fact table means either inventing a weekly split of a six-month total or
+throwing away the geography. Both are worse than admitting there are two grains.
+
+**Country data has no hours, and never will.** Netflix publishes rank by
+country and nothing else. Every regional claim therefore has to be an explicitly
+stated proxy for engagement or it is simply a fabrication with a chart on it.
+The first regional query I wrote counted Top 10 appearances per country and
+returned exactly the same number for all 94 — every country fills ten film slots
+and ten TV slots every week, so the count measures the format, not the audience.
+
+**A title is not a stable thing.** The weekly files keep a show's season in a
+separate column, so `show_title` stays generic — "The Gentlemen" — while
+`season_title` carries "The Gentlemen: Season 2". The half-yearly report spells
+the season straight into the title string instead. The same work has three
+different names depending on which file you opened.
+
+## Approach
+
+The model is a fact constellation: two fact tables at their own honest grains,
+sharing conformed date, title and region dimensions. `fact_engagement_half`
+holds real hours per title per half; `fact_top10_weekly` holds weekly rank by
+region, with hours present only on the global rows, because those are the only
+rows where hours exist.
+
+Nothing was analysed before the build was checked against Netflix's own
+published totals: **95.19, 96.21 and 97.66 billion hours** for the three halves,
+against the figures Netflix quotes in its own write-ups of the same reports. A
+pipeline that cannot reproduce a number the source already published is not
+ready to produce one it has not.
+
+The KPI layer is SQL, with window functions where the questions are about
+ranking and movement: `RANK()` partitioned by period for top titles, a running
+`SUM() OVER` for how much of a half's hours the top ten titles actually account
+for, and `LAG()` for half-over-half growth and week-over-week rank movement.
+
+For regions, two proxies replaced the appearance count that measured nothing —
+how long a title *sticks* in a country's Top 10, and how often a country's
+number one matches the global number one. Both are labelled as proxies in the
+dashboard and in the repository, because neither is an hour.
+
+The dimensional model is exported as flat CSVs that Power BI's Text/CSV
+connector loads directly as a star, with the relationship map and the DAX
+measures written up alongside it.
+
+## Outcome
+
+- **Growth is breadth, not depth.** Total hours rose across the three halves —
+  95.19B → 96.21B → 97.66B — while average hours *per title* fell from 5.88M to
+  5.62M and the tracked catalogue grew 7.4%. More titles each earning less, not
+  bigger hits.
+- **Series earn three and a half times what films earn per title, and the gap is
+  widening.** Film titles grew from 8,674 to 9,179 while film hours *fell* from
+  24.1B to 23.3B. Series went from 74.7% to 76.1% of all hours.
+- **International breadth has not become hours parity.** Across five years of
+  global Top 10 weeks, non-English films out-chart English films by distinct
+  titles — 1,129 against 1,086 — and earn less than half the hours, 18.0B
+  against 39.0B.
+- **A premiere revives its own back catalogue, worldwide, in the same week.**
+  When *The Gentlemen* returned for a second season it debuted at number one
+  globally and charted in 90 of 94 markets — and its first season, dormant on
+  the weekly charts since mid-2024, came back into the Top 10 in **85 of 94
+  markets**, climbing in 53 of them by as much as eight places. Measuring a
+  premiere on its own undercounts what the release earned.
+- **How long a hit holds a market varies by more than 2.5x.** A title sticks in
+  Ukraine's Top 10 for 5.81 weeks on average and in Trinidad and Tobago's for
+  2.17. Canada tracks the global number one film more closely than almost any
+  market and is *also* one of the fastest to move on — watching what is trending
+  and watching intensely are not the same behaviour, and one chart cannot be
+  read as the other.
+
+## What I'd change
+
+**Two bugs were found rather than shipped, and both would have been invisible in
+a dashboard.** Keying a title on `show_title` alone merged two concurrently
+charting seasons of the same show into a single row, which quietly corrupted
+every rank-change calculation that touched it. Then the movers query filtered to
+the latest week *before* its `LAG()` window ran — and since a `WHERE` clause is
+applied before window functions are evaluated, that left exactly one row per
+partition, so `LAG()` returned null for every row and "biggest movers" came back
+empty. A query returning nothing is a mercy; the same mistake one step less
+severe returns a plausible number instead.
+
+**There are no genre tags.** "Content type" here means series or film, English
+or non-English — not drama, not comedy. Netflix does not publish genre, so
+answering *which genres over-index* means joining to a source like TMDB by
+title, and the entity resolution that made seasons hard here would get harder
+across a second vocabulary.
+
+**The dashboard itself is the next step.** The model, the SQL layer and the
+Power BI extract are built and validated; the published report is not, and the
+findings above currently live in queries and a README rather than in something a
+stakeholder can filter. That is the half of the work a dashboard is actually
+for.
+
+**The long tail is partly a single row.** Netflix's own report folds titles
+below its reporting threshold into aggregate "Other" buckets, which is its
+methodology rather than an artefact of this pipeline — but it means any
+concentration measure computed here treats a large, diffuse tail as one title
+and slightly understates how long that tail really is.
