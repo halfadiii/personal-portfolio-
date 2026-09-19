@@ -433,8 +433,9 @@ disclosure), the relevance gate's one-word verdict, every draft with the
 citation check's verdict on it — a failed draft is struck through rather than
 hidden — and the final answer with its `[S1]` tags linked back to the passages
 and to the FDA PDF at that page. Below it: the five steps, the parity figures,
-and four stated limitations (no evaluation set yet; the gate is a model's
-judgement; 42 scanned clearances excluded; not regulatory advice).
+and five stated limitations (the exam is written but not yet scored; the
+gate is a model's judgement; it can find the right subject in the wrong kind
+of document; 42 scanned clearances excluded; not regulatory advice).
 
 On load it calls `GET /api/rag`, which decodes the index, so a cold start is
 paid before anyone asks. Without `DEEPSEEK_API_KEY` it says answering is
@@ -1783,6 +1784,25 @@ did not survive being recomputed:
 The case study's "the dashboard itself is the next step" paragraph now says
 the dashboard exists, and that the Power BI report is still unpublished.
 
+### Phase 9: the RAG project's exam (09-19)
+
+He built Day 4 of the RAG plan locally: `make_eval_set.py` and `data/eval/`.
+A model drafted 66 questions from real passages (32 single-510(k), 24
+single-guidance, 10 cross-document); he reviewed each by hand, kept 40 (6
+edited) and dropped 26, mostly over comparison tables PDF extraction had
+mangled and boilerplate cover letters. With 9 hand-written should-refuse
+questions the exam is 49: 22 single-510(k), 17 single-guidance, 1
+cross-document, 8 unanswerable, 1 known gap (an ISO 10993-1 table flattened
+by extraction); 40 answerable across 36 documents with page ranges, 9 (18%) to
+refuse. `eval_set.json` matched `reviewed.json` exactly, so it was committed
+as built, not rebuilt. Day 5, scoring, has not been run.
+
+The site's "no evaluation set yet" limitation became "the exam is written, it
+hasn't been sat yet", and the card gained one detail line. In the project
+repo, the exam files and a README section were committed; his local
+`test.py` was left out on purpose: it had become a script that deletes the
+scanned 510(k) PDFs from `data/raw`, which is cleanup, not a test.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -2075,9 +2095,11 @@ needs its axe run after it has loaded.
     never decided.
 14. **The RAG function carries its whole index**, about 73 MB, most of it
     the model. A cold start decodes it, and the page's readiness call pays
-    that before a question is asked. There is no evaluation set yet: the demo
-    proves every citation points at a passage the model was given, not that
-    the answer reads that passage correctly.
+    that before a question is asked. The evaluation set exists (49
+    questions, 09-19) but has not been scored, so the demo still proves only
+    that every citation points at a passage the model was given, not that the
+    answer reads that passage correctly. When scores exist, they go on the
+    page; until then it claims no accuracy.
 
 ---
 

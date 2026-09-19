@@ -125,11 +125,17 @@ export default function RagDemoPage() {
           Where I&rsquo;d push on it.
         </h2>
         <ul className="measure mt-8 flex list-none flex-col gap-5 p-0">
-          <Limit title="There is no evaluation set yet.">
+          <Limit title="The exam is written. It hasn't been sat yet.">
             The citation check proves an answer only cites passages it was
-            given. It does not prove the answer reads those passages correctly.
-            Measuring that needs a set of questions with known answers, and that
-            is the next piece of work, not something this page can claim.
+            given, not that it reads them correctly. Measuring that needs
+            questions with known answers, so I built them: a model drafted 66
+            from real passages and I reviewed every one by hand. 26 were
+            dropped, mostly because the passage was a mangled comparison table
+            or a boilerplate cover letter and the answer couldn&rsquo;t be
+            trusted. That left 49: 40 with a known answer and the page it lives
+            on, across 36 documents, and 9 it should refuse. Scoring the system
+            against them is the next step, so this page makes no accuracy
+            claim yet.
           </Limit>
           <Limit title="The gate is a judgement, not a rule.">
             Whether passages are relevant is decided by a model saying one word.

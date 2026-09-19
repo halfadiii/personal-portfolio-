@@ -68,6 +68,7 @@ export const projects: Project[] = [
       "Searches 1,752 chunks two ways at once, by meaning and by exact keyword, and fuses the rankings, because \"ISO 10993-1\" and \"how is it sterilised\" fail in opposite ways.",
       "A relevance gate refuses when the retrieved passages do not answer the question, instead of answering from whatever text came closest.",
       "Every claim cites a numbered source, checked in plain code: a draft citing a source it was never given is thrown away, rewritten once, then refused.",
+      "Built the exam before scoring anything: 66 model-drafted questions reviewed by hand down to 40 with known answers and pages, plus 9 it must refuse.",
     ],
     live: {
       href: "/demo/rag",
