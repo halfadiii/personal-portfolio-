@@ -181,6 +181,7 @@ npm test             # Playwright: axe on every route + the acceptance checklist
 | `npm run gen:wait-snapshot` | Rebuild the rainfall regression snapshot |
 | `npm run gen:print-inspection` | Rebuild the print inspection run from the production engine's CSV |
 | `npm run gen:rag-index` | Rebuild `data/rag/` from the Agentic RAG project: chunks, vectors, keyword index, the float16 model, and the Python parity reference (needs that project's Python stack) |
+| `npm run gen:netflix` | Rebuild the streaming dashboard's aggregates from the engagement repo's star schema (default source `../../Ent. Dashboard`; needs pandas) |
 | `npm run test:rag` | Vitest: the TypeScript retrieval held to the Python reference on 24 questions |
 
 ### Environment variables
@@ -256,6 +257,7 @@ portfolio/
         about/page.tsx
         work/[slug]/page.tsx
         dashboard/bank-marketing/page.tsx
+        dashboard/netflix-engagement/page.tsx
         demo/subway/page.tsx
         demo/print-inspection/page.tsx
         demo/rag/page.tsx
@@ -364,6 +366,25 @@ was typed in by hand.
 | Logistic regression | 0.9029 | 0.4632 | 0.9095 |
 | Decision tree | 0.8679 | 0.4501 | 0.6930 |
 | Gradient boosting | 0.9051 | 0.5024 | 0.9162 |
+
+### `/dashboard/netflix-engagement`
+
+The streaming engagement project's dashboard: Netflix's three half-yearly What
+We Watched reports and five years of weekly Top 10 charts in 94 markets, as
+modelled in `halfadiii/netflix-engagement-analytics`. A half-year selector
+drives the KPI row, the concentration curve (rank on a log axis, with a slider
+over rank stops and the top ten titles behind a disclosure) and the
+series-against-films split. The rest spans all the data: growth indexed to
+H1 2025, English against non-English in the global Top 10, five years of
+weekly Top 10 hours by category with a 4-week average, a scatter of all 94
+markets (weeks a title stays against how often the market's number one is
+the world's, with a market picker and a full table), and a 94-cell grid of
+*The Gentlemen* Season 1's status in each market the week after Season 2
+premiered. Recharts, lazy-loaded; the page itself is 1.48 kB.
+
+Colour encodes only: film orange, series blue, non-English dashed, and a
+status per market cell whose text colour was chosen by measured contrast
+(black on the blue is 3.51:1 and fails, so those cells use off-white).
 
 ### `/demo/subway`
 
@@ -493,7 +514,7 @@ to change what it says, edit a file in `src/content/`.
 | `types.ts` | The shared types |
 | `index.ts` | The barrel |
 | `data/` | Committed datasets: bank marketing meta, print inspection, subway wait snapshot |
-| `work/*.mdx` | The two long-form case studies |
+| `work/*.mdx` | The three long-form case studies |
 
 ### The current content, verbatim
 
@@ -564,7 +585,10 @@ system (has a live demo), Agentic RAG over FDA filings (Sep 2026, dated from
 the project folder; has a live demo and a public repo,
 `github.com/halfadiii/fda-510k-agentic-rag`; it replaced Customer churn
 prediction on 2026-09-14, at his request), Real-time fake news
-detector, Marketing campaign segmentation, Mineral mapping and classification.
+detector, Streaming engagement analytics (Sep 2026; replaced Marketing campaign
+segmentation on 2026-09-19; has a case study, a live dashboard, and a public
+repo, `github.com/halfadiii/netflix-engagement-analytics`), Mineral mapping and
+classification.
 
 **Skills: five groups.** Languages · Analytics & reporting · Statistical
 methods · Data operations · Platforms & databases. MLOps, prompt engineering and
@@ -1147,7 +1171,7 @@ engine to read.
 | CLS < 0.02 | **0.0004** measured, **0** as Lighthouse scores it |
 | LCP < 2.0s | **0.70s** under 1.6 Mbps / 150ms RTT / 4× CPU |
 | Initial JS ≤ 180 KB gz | **169 KB** on `/` at the time of that measurement; **183 KB** after the relay landed; **184 KB** since the Agentic RAG project replaced churn on 09-14, because `SceneMount` renders each project's `detail` bullets in the home bundle and churn had none |
-| Zero axe violations | 42 Playwright tests pass, desktop and mobile |
+| Zero axe violations | 46 Playwright tests pass, desktop and mobile |
 
 Per-route first load, measured on the current build:
 
@@ -1156,6 +1180,7 @@ Per-route first load, measured on the current build:
 | `/` | 61.3 kB | **184 kB** |
 | `/about` | 179 B | 112 kB |
 | `/dashboard/bank-marketing` | 1.48 kB | 108 kB |
+| `/dashboard/netflix-engagement` | 1.48 kB | 108 kB |
 | `/demo/print-inspection` | 9.06 kB | 124 kB |
 | `/demo/rag` | 4.41 kB | 119 kB |
 | `/demo/subway` | 1.54 kB | 108 kB |
@@ -1251,6 +1276,7 @@ depends on a live warehouse or an API being awake.
 | `gen:print-inspection` | The EagleEyes production run: `visualizer_results.csv` + `rules.json` | `src/content/data/print-inspection.json` |
 | `gen:earth` | NASA Blue Marble Next Generation + Black Marble masters | `public/media/earth/{day,night,cloud,mask}.webp` |
 | `gen:rag-index` | The Agentic RAG project's own built artifacts (`chunks.json`, `bm25.pkl`, the Qdrant collection) + the cached bge-small weights | `data/rag/`: chunks, vectors, BM25 internals, sources, vocab, the model as two float16 files, and `parity/python-reference.json` |
+| `gen:netflix` | The engagement repo's `data/model/*.csv` (Netflix What We Watched + Top 10, modelled) | `src/content/data/netflix-engagement.json`, 40 KB of aggregates; the 517,500-row weekly table never ships |
 
 ### The bank marketing rebuild
 
@@ -1727,6 +1753,36 @@ Two things the live run showed that reading the code would not have:
 
 Vercel reported the deploy of `7fbc561` as successful through GitHub's commit status, checked there rather than by polling the live site.
 
+### Phase 8: the streaming dashboard (09-19)
+
+**`533d9f2` Replace the segmentation card with the streaming engagement
+project.** Made in a separate session: the card, its metric (85 of 94 markets)
+and the case study `work/streaming-engagement-analytics.mdx`, with no live
+page. The master file was not updated then; it is here.
+
+**`9f5f537` Give the streaming engagement project a live dashboard.** At his
+request. `scripts/build-netflix-dashboard.py` reruns the repository's SQL KPI
+layer in pandas and prints every figure the README states, and three of them
+did not survive being recomputed:
+
+- **Netflix's "Other Shows" rollup is the second-largest row in 2026H1**
+  (757M hours; fourth in 2025H2; absent from 2025H1). It belongs in the
+  totals, which is how Netflix reports them and why the totals still match,
+  but the repo's top-ten share counted it as a title. Leaving it out of every
+  per-title view moves the top ten's share from 6.44% to 6.2% (2025H2) and
+  from 5.10% to 4.7% (2026H1).
+- **The premiere took two weeks, not one.** Season 2 first charted on
+  2026-09-06, at number 3 globally in 75 markets. The 85-market figure for
+  Season 1 is the following week; in the premiere week it was 56. The card and
+  the case study were corrected; the repository's README still says one week.
+- **"Dormant since mid-2024" holds, precisely:** Season 1's last week on the
+  global chart before the premiere was 2024-05-12, and through 2025 and 2026
+  it charted in at most two markets in any week. A first pass of this entry
+  said April, off a truncated printout; the build script's own field fixed it.
+
+The case study's "the dashboard itself is the next step" paragraph now says
+the dashboard exists, and that the Power BI report is still unpublished.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -1923,6 +1979,19 @@ absolutely positioned, and a scroll container that is not itself positioned
 does not contain an absolute descendant, so that invisible text was laid out
 against the page. The fix was `relative` on the scroller. The general version:
 `overflow: auto` without a `position` only contains in-flow content.
+
+### An audit that ran before the page existed
+
+The stock axe test passed `/dashboard/netflix-engagement`, and the page had
+two serious violations: a slider thumb with no accessible name, and black
+text on blue cells at 3.51:1. The suite waits for the preloader and audits;
+a dashboard loaded with `next/dynamic` is still a placeholder at that moment,
+so the audit checked a grey box. What caught them was a script that waited
+for the charts, used every control, opened every disclosure, and audited
+again (`.tmp/netflix-check.mjs`, not committed). The bank dashboard has the
+same exposure, so it was audited the same way on 2026-09-19, after all 8
+charts had drawn: 0 violations at 1280px and at 320px. Any lazy-loaded panel
+needs its axe run after it has loaded.
 
 ### The measurement lessons
 
