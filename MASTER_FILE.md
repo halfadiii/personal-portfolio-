@@ -469,9 +469,10 @@ in parallel (measured: 241ms, 443 KB of protobuf, ~500 trains), decodes them,
 and returns about 10 KB of JSON. It exists because the feeds carry no CORS
 headers, so a browser cannot read them at all.
 
-`export const revalidate = 20` is load-bearing rather than an optimisation: the
-edge answers almost every request, so the MTA is asked about three times a
-minute whether one person is watching or a thousand. It returns positions and
+The route is `force-dynamic`, the upstream fetch is `no-store`, and the only
+caching is a plain ten-second expiry: `Vercel-CDN-Cache-Control: max-age=10` at
+the edge and a ten-second memo in the instance. It was `revalidate = 20` until
+2026-10-03, and that was a bug on a low-traffic site; see section 18. It returns positions and
 predictions and nothing derived — the arrivals, headways and excess wait are
 inferred in the browser, because watching them being made is the point.
 
@@ -2093,6 +2094,27 @@ twenty rows, zero axe violations. The screenshot is what showed a missing dot,
 and measuring the dot's y against the plot's top confirmed it. The panel now
 plots log10 of each value on linear axes, and the check asserts that no dot
 touches a plot edge.
+
+### Trains that did not move (10-03)
+
+He reported the subway demo's trains standing still. The feed was healthy: 493
+trains, 8 of 8 feeds. The cause was the caching added in `8784442`.
+`revalidate` is stale-while-revalidate, so a request after the window is
+answered with the old copy while a new one is built. On a busy site that copy
+is seconds old. On a portfolio it is from the last visitor, and the upstream
+fetch was cached the same way, so it took two further polls to clear. Measured
+on a server left idle: every train frozen for 60 seconds, then a jump. Even in
+steady state the data arrived 30 to 34 seconds old against the MTA's 1 to 11.
+
+Two changes. The route no longer serves an old copy at all (above); the first
+request after a cold start now carries data 3 seconds old. And a train no
+longer freezes when its predicted arrival passes: `place()` and
+`LiveFleet.advance()` carry it on toward its next predicted stop after a
+20-second dwell, so it is still drawn by the feed's own predictions. After:
+3 to 5 of 7 L trains moving in every 10-second window from the first second.
+
+The general lesson: stale-while-revalidate is a traffic assumption. Before
+using it, ask how old the copy is when nobody has visited for a day.
 
 ### The measurement lessons
 

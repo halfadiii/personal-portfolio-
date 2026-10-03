@@ -116,7 +116,10 @@ export function place(train: LiveTrain, now: number): Placed | null {
 
   const here = STATIONS[index];
   if (train.status === "STOPPED_AT") {
-    return { train, at: here.at, atStation: target };
+    // Standing at the platform when the snapshot was taken. It does not stay
+    // there for the half minute until the next one, so it leaves when its own
+    // next prediction says it must have.
+    return onward(train, index, null, now) ?? { train, at: here.at, atStation: target };
   }
 
   // Coming from the platform behind it, which depends on which way it is going.
@@ -141,11 +144,63 @@ export function place(train: LiveTrain, now: number): Placed | null {
   }
   run = Math.min(400, Math.max(30, run));
 
+  // Past its predicted arrival: it has reached that platform as far as the
+  // feed is concerned, so carry on toward the stop after it. Without this a
+  // train froze at the platform until the next snapshot and then jumped.
+  if (now >= due) {
+    return onward(train, index, due, now) ?? { train, at: here.at, atStation: target };
+  }
+
   const progress = Math.min(1, Math.max(0, 1 - (due - now) / run));
   return {
     train,
     at: behind.at + (here.at - behind.at) * progress,
     atStation: null,
+  };
+}
+
+/** How long a train is held at a platform before it is drawn leaving. */
+const DWELL_SECONDS = 20;
+
+/**
+ * A train that has reached `STATIONS[index]`, moved on toward its next
+ * predicted stop.
+ *
+ * Still the feed's belief and nothing else: it is due at the next platform at
+ * a published time, so it is drawn getting there at that time. The one thing
+ * not published is when it leaves this one. With an arrival time here it
+ * dwells `DWELL_SECONDS`; without one (it was already standing here) it
+ * leaves as late as the nominal run to the next stop allows.
+ *
+ * Null when there is nothing ahead to move toward, or it is not time yet.
+ */
+function onward(
+  train: LiveTrain,
+  index: number,
+  arrivedAt: number | null,
+  now: number,
+): Placed | null {
+  const here = STATIONS[index];
+  const at = train.predictions.findIndex((p) => p.stop === here.id);
+  const next = train.predictions[at + 1];
+  if (!next) return null;
+  const nextIndex = INDEX.get(next.stop);
+  if (nextIndex === undefined || Math.abs(nextIndex - index) !== 1) return null;
+
+  const there = STATIONS[nextIndex];
+  const span = Math.abs(there.at - here.at);
+  const nominal = Math.min(400, Math.max(30, span / NOMINAL_UNITS_PER_SECOND));
+  const leaves =
+    arrivedAt === null
+      ? next.at - nominal
+      : Math.min(arrivedAt + DWELL_SECONDS, arrivedAt + (next.at - arrivedAt) / 3);
+  if (now <= leaves || next.at <= leaves) return null;
+
+  const progress = Math.min(1, (now - leaves) / (next.at - leaves));
+  return {
+    train,
+    at: here.at + (there.at - here.at) * progress,
+    atStation: progress >= 1 ? next.stop : null,
   };
 }
 

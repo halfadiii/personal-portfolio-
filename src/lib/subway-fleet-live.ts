@@ -46,11 +46,17 @@ type Track = {
   /** How long the feed implies that segment takes. */
   runSeconds: number;
   stopped: boolean;
+  /** The stop after `toArc`, and when it is due there; null if unknown. */
+  nextArc: number | null;
+  nextDue: number;
   target: number;
   delay: number | null;
   /** Predicted arrival at each station still ahead, by station index. */
   ahead: Map<number, number>;
 };
+
+/** How long a train is held at a platform before it is drawn leaving. */
+const DWELL_SECONDS = 20;
 
 export class LiveFleet extends Fleet {
   private tracks = new Map<string, Track>();
@@ -144,6 +150,19 @@ export class LiveFleet extends Fleet {
       }
       runSeconds = Math.min(400, Math.max(20, runSeconds));
 
+      let nextArc: number | null = null;
+      let nextDue = 0;
+      // The prediction after the one for the stop it is at or heading for. A
+      // standing train is sometimes no longer listed at its own platform, in
+      // which case the first prediction is already the next stop.
+      const listed = train.predictions.findIndex((p) => p.stop === targetId);
+      const onward = train.predictions[listed + 1];
+      const onwardIndex = onward ? this.stationIndex.get(onward.stop) : undefined;
+      if (onward && onwardIndex !== undefined) {
+        nextArc = this.arcOf(line, onwardIndex);
+        nextDue = onward.at;
+      }
+
       const ahead = new Map<number, number>();
       for (const prediction of train.predictions) {
         const index = this.stationIndex.get(prediction.stop);
@@ -157,6 +176,8 @@ export class LiveFleet extends Fleet {
         dueAt,
         runSeconds,
         stopped: train.status === "STOPPED_AT",
+        nextArc,
+        nextDue,
         target,
         delay: train.delay,
         ahead,
@@ -206,17 +227,29 @@ export class LiveFleet extends Fleet {
     for (const vehicle of this.vehicles) {
       const track = this.tracks.get(vehicle.id);
       if (!track) continue;
-      if (track.stopped || !track.dueAt) {
-        vehicle.t = track.toArc;
-        vehicle.atStation = track.stopped ? track.target : null;
+      const arrived = track.stopped || !track.dueAt || now >= track.dueAt;
+      if (!arrived) {
+        const progress = Math.max(0, 1 - (track.dueAt - now) / track.runSeconds);
+        vehicle.t = track.fromArc + (track.toArc - track.fromArc) * progress;
+        vehicle.atStation = null;
         continue;
       }
-      const progress = Math.min(
-        1,
-        Math.max(0, 1 - (track.dueAt - now) / track.runSeconds),
-      );
-      vehicle.t = track.fromArc + (track.toArc - track.fromArc) * progress;
-      vehicle.atStation = progress >= 1 ? track.target : null;
+
+      // At the platform as far as the feed is concerned. It does not wait
+      // there for the next snapshot: it is due at the stop after at a
+      // published time, so it is drawn leaving in time to make it. Without
+      // this every train froze on arrival and jumped half a minute later.
+      vehicle.t = track.toArc;
+      vehicle.atStation = track.target;
+      if (track.nextArc === null || !track.nextDue) continue;
+      const leaves =
+        track.stopped || !track.dueAt
+          ? track.nextDue - track.runSeconds
+          : Math.min(track.dueAt + DWELL_SECONDS, track.dueAt + (track.nextDue - track.dueAt) / 3);
+      if (now <= leaves || track.nextDue <= leaves) continue;
+      const progress = Math.min(1, (now - leaves) / (track.nextDue - leaves));
+      vehicle.t = track.toArc + (track.nextArc - track.toArc) * progress;
+      vehicle.atStation = null;
     }
   }
 

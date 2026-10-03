@@ -6,21 +6,35 @@ export const runtime = "nodejs";
 // letting a hung upstream hold a function open.
 export const maxDuration = 15;
 /*
- * Regenerated at most every twenty seconds, and cached in between.
+ * Evaluated per request, with the edge holding each answer for ten seconds.
  *
- * This started as `dynamic = "force-dynamic"` with an explicit
- * `s-maxage=20` header, and that quietly did the opposite of what it said:
- * force-dynamic makes Next replace the response's cache-control with
- * `max-age=0`, so the header was stripped, every edge request was a MISS, and
- * every visitor's poll reached the MTA directly. Verified on the deployed
- * site, not assumed — `x-vercel-cache: MISS` on consecutive requests is what
- * gave it away.
+ * This was `revalidate = 20`, and that is stale-while-revalidate: a request
+ * after the window is answered from the old copy while a new one is built
+ * behind it. On a busy site that is a copy twenty seconds old. On a portfolio
+ * it is a copy from whenever the last visitor left, and the upstream fetch was
+ * cached the same way, so it took two more polls to clear. Measured: a visitor
+ * arriving after a quiet spell got trains frozen at long-past positions for
+ * sixty seconds, which reads as a broken page.
  *
- * `revalidate` is the mechanism that actually holds. It also stops the other
- * failure: with no dynamic API in the handler, Next would otherwise be free to
- * evaluate this at build time and serve one frozen snapshot forever.
+ * So nothing here serves an old copy any more. The handler runs on demand,
+ * the upstream fetch is uncached, and the only caching is a plain expiry: ten
+ * seconds at the edge and ten in this instance's memory, both of which hand
+ * back nothing rather than something old once they lapse. The MTA still sees
+ * at most a handful of requests a minute however many people are watching.
+ *
+ * `Vercel-CDN-Cache-Control` rather than `Cache-Control`, because a dynamic
+ * handler's `s-maxage` is rewritten to `max-age=0` on the way out -- found the
+ * hard way on this same route.
  */
-export const revalidate = 20;
+export const dynamic = "force-dynamic";
+
+const FRESH_MS = 10_000;
+const HEADERS = {
+  "cache-control": "no-store",
+  "cdn-cache-control": "max-age=10",
+  "vercel-cdn-cache-control": "max-age=10",
+};
+let memo: { at: number; payload: LivePayload } | null = null;
 
 /**
  * One poll of the MTA's L feed, decoded, on the server.
@@ -39,8 +53,8 @@ export const revalidate = 20;
  *
  * ## The caching is doing real work
  *
- * A twenty-second revalidation window means the edge answers almost every
- * request and the MTA is asked about three times a minute — the same three
+ * A ten-second expiry means the edge answers most requests and the MTA is
+ * asked a handful of times a minute — the same three
  * times whether one person is watching or a thousand. That is the difference
  * between a demo and a nuisance: a public feed does not owe anyone unlimited
  * requests, and a page that hammers it on every visitor is one that deserves
@@ -161,9 +175,9 @@ async function pull(
   try {
     const response = await fetch(BASE + suffix, {
       signal,
-      // Matches the route's own window. `no-store` here would force the whole
-      // route dynamic again and undo the caching above.
-      next: { revalidate: 20 },
+      // Never a cached copy: a stale snapshot is the one thing this route
+      // must not hand on.
+      cache: "no-store",
       headers: { "user-agent": "adityaaryan.in subway demo" },
     });
     if (!response.ok) return null;
@@ -177,6 +191,10 @@ async function pull(
 }
 
 export async function GET() {
+  if (memo && Date.now() - memo.at < FRESH_MS) {
+    return NextResponse.json(memo.payload, { headers: HEADERS });
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -271,7 +289,8 @@ export async function GET() {
       trains,
     };
 
-    return NextResponse.json(payload);
+    memo = { at: Date.now(), payload };
+    return NextResponse.json(payload, { headers: HEADERS });
   } catch {
     return NextResponse.json(
       { error: "The MTA feeds could not be read." },
