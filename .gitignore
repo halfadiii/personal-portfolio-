@@ -62,3 +62,6 @@ public/robots.txt
 .tmp/
 .dev.err.log
 .devserver.log
+
+# Private notes and backups (DNS records etc.), never committed
+.private/
