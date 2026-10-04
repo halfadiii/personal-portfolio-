@@ -2116,6 +2116,18 @@ longer freezes when its predicted arrival passes: `place()` and
 The general lesson: stale-while-revalidate is a traffic assumption. Before
 using it, ask how old the copy is when nobody has visited for a day.
 
+### A call to action that was not a link (10-04)
+
+Under the orbit, each project's caption ends in a line like "Open the live
+dashboard →". It was a paragraph of text styled like a link. The title above it
+was a real link, and the planet opened the full record, but the line that told
+him where to click did nothing; he had to click the planet first and use the
+button inside the record. In `SceneMount.tsx` that line is now a `Link` to
+`project.live.href`. Projects with no live version still show "Click the planet
+for the full record" as plain text, because that one is an instruction. Checked
+by clicking it for all seven planets in a real browser: the five with a live
+version each landed on the right page.
+
 ### The measurement lessons
 
 - **Bounding boxes over-report contrast failures.** They count the empty half of

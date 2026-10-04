@@ -245,9 +245,18 @@ export function SceneMount({
             </p>
             {focused === null ? (
               <p className="label-mono text-signal mt-2">
-                {project.live
-                  ? `${project.live.label} →`
-                  : "Click the planet for the full record"}
+                {/* This read as a link and was plain text: it looked like the
+                    way in and the only way in was the planet. */}
+                {project.live ? (
+                  <Link
+                    href={project.live.href}
+                    className="ease-brief hover:text-steel transition-colors duration-[var(--dur-ui)]"
+                  >
+                    {project.live.label} →
+                  </Link>
+                ) : (
+                  "Click the planet for the full record"
+                )}
               </p>
             ) : null}
 
