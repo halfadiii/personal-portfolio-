@@ -13,7 +13,7 @@ what you are looking at, section 5 to find your way around the files, and
 sections 17 and 18 before you change anything, because most of the code that
 looks strange in here is code that is the way it is for a measured reason.
 
-Last updated: 2026-09-07, at commit `2b16979`.
+Last updated: 2026-10-04.
 
 ---
 
@@ -182,6 +182,8 @@ npm test             # Playwright: axe on every route + the acceptance checklist
 | `npm run gen:print-inspection` | Rebuild the print inspection run from the production engine's CSV |
 | `npm run gen:rag-index` | Rebuild `data/rag/` from the Agentic RAG project: chunks, vectors, keyword index, the float16 model, and the Python parity reference (needs that project's Python stack) |
 | `npm run gen:netflix` | Rebuild the streaming dashboard's aggregates from the engagement repo's star schema (default source `../../Ent. Dashboard`; needs pandas) |
+| `npm run gen:pipeline` | Cut the subway case study's code blocks out of a checkout of the subway repository (default `../../MTA`) into `src/content/data/pipeline-excerpts.json` |
+| `npm run check:pipeline` | Fail if those excerpts, or the two code blocks in the case study's prose, are no longer in that repository as shown |
 | `npm run test:rag` | Vitest: the TypeScript retrieval held to the Python reference on 24 questions |
 
 ### Environment variables
@@ -353,9 +355,24 @@ hero's clipping edge.
 ### `/work/[slug]` — Case study
 
 MDX, statically generated (`dynamicParams = false`). Sticky table of contents,
-reading progress as a 1px top rule. Two case studies exist:
-`nyc-subway-reliability` and `print-inspection-cv`. The subway one carries the
-pipeline diagram (section `01`) and the rainfall regression (section `02`).
+reading progress as a 1px top rule. Three case studies exist:
+`nyc-subway-reliability`, `print-inspection-cv` and
+`streaming-engagement-analytics`. The subway one carries the pipeline diagram
+(section `01`) and the rainfall regression (section `02`).
+
+**Every code block on the subway case study is the repository's own code.**
+The five stage panels read `src/content/data/pipeline-excerpts.json`, which
+`gen:pipeline` cuts out of a checkout of
+`github.com/halfadiii/nyc-subway-reliability` by marker lines and records
+the commit of (`b6b6091` on 2026-10-04). The two blocks in the prose are
+pasted by hand and held to the same standard by `check:pipeline`. Until
+2026-10-04 all of it was written to look the part; section 18 has why that
+was a false claim and how it was found.
+
+MDX gained a numbered list on the same day (`ol` in `Mdx.tsx`): a CSS counter
+in the column the unordered list keeps its dash in. It exists because one
+excerpt's comments say "see (2) above", and the list above it had to have a
+(2).
 
 ### `/dashboard/bank-marketing`
 
@@ -539,10 +556,10 @@ to change what it says, edit a file in `src/content/`.
 | `about.ts` | The about-page prose, the "beyond" list, the portrait slot |
 | `offclock.ts` | The five cards, the track, and `hourReads()` |
 | `trail.ts` | The six scroll chapters |
-| `pipeline.ts` | The eight MTA feeds and six pipeline stages with their code blocks |
+| `pipeline.ts` | The eight MTA feeds and six pipeline stages. The stage text is written here; the code blocks are read from `data/pipeline-excerpts.json`, which is generated and never edited by hand |
 | `types.ts` | The shared types |
 | `index.ts` | The barrel |
-| `data/` | Committed datasets: bank marketing meta, print inspection, subway wait snapshot |
+| `data/` | Committed datasets: bank marketing meta, print inspection, subway wait snapshot, pipeline code excerpts |
 | `work/*.mdx` | The three long-form case studies |
 
 ### The current content, verbatim
@@ -618,6 +635,24 @@ detector, Streaming engagement analytics (Sep 2026; replaced Marketing campaign
 segmentation on 2026-09-19; has a case study, a live dashboard, and a public
 repo, `github.com/halfadiii/netflix-engagement-analytics`), Mineral mapping and
 classification.
+
+**The subway project's claims were corrected on 2026-10-04.** Its stack reads
+`Python · dbt · DuckDB · GitHub Actions`, and its four detail lines say: it
+polls eight feeds every 30 seconds and keeps every snapshot; it derives
+arrivals from predictions that vanish; it loads only what is new, proved
+against a full rebuild; and it models excess wait in dbt star-schema tables on
+DuckDB, with the BigQuery path written and not yet run. Until then the card
+said `Python · BigQuery · dbt · GCP`, "ingests ... into BigQuery" and "a
+weather regression quantifying rain's measured effect", following the résumé
+line it was first written from. The repository has only ever run on DuckDB,
+and its rain regression declines to answer on the data it has. The case study
+and the pipeline section were corrected with it, and the case study's summary
+now ends "with an honest null on what rain costs a rider".
+
+Four detail lines and not five. They are shown in the orbit's flown-in record,
+which sits on the hero: on a 768px-tall screen its top is already level with
+the bottom of the name, and a fifth line moved it 53px further up into the
+letters. Measured, at three window sizes, before settling it.
 
 **Skills: five groups.** Languages · Analytics & reporting · Statistical
 methods · Data operations · Platforms & databases. MLOps, prompt engineering and
@@ -1199,14 +1234,14 @@ engine to read.
 | Lighthouse, desktop | **100 / 100 / 100 / 100** |
 | CLS < 0.02 | **0.0004** measured, **0** as Lighthouse scores it |
 | LCP < 2.0s | **0.70s** under 1.6 Mbps / 150ms RTT / 4× CPU |
-| Initial JS ≤ 180 KB gz | **169 KB** on `/` at the time of that measurement; **183 KB** after the relay landed; **184 KB** since the Agentic RAG project replaced churn on 09-14, because `SceneMount` renders each project's `detail` bullets in the home bundle and churn had none |
+| Initial JS ≤ 180 KB gz | **169 KB** on `/` at the time of that measurement; **183 KB** after the relay landed; **184 KB** since the Agentic RAG project replaced churn on 09-14, because `SceneMount` renders each project's `detail` bullets in the home bundle and churn had none. Measured to the byte on 10-04 from the build manifest: **184.85 kB**, which Next prints as 185, and **184.89 kB** after the subway card's four lines were rewritten |
 | Zero axe violations | 46 Playwright tests pass, desktop and mobile |
 
 Per-route first load, measured on the current build:
 
 | Route | Page | First load |
 | --- | --- | --- |
-| `/` | 61.3 kB | **184 kB** |
+| `/` | 62.1 kB | **185 kB** |
 | `/about` | 179 B | 112 kB |
 | `/dashboard/bank-marketing` | 1.48 kB | 108 kB |
 | `/dashboard/netflix-engagement` | 1.48 kB | 108 kB |
@@ -1233,7 +1268,9 @@ Both LCP figures are reported rather than picking the flattering one.
   with server rendering still on so the fields are in the HTML. Sonner after
   paint. Howler on first use and only if sound is switched on.
 - **Shiki runs on the server.** Code is highlighted at render time and shipped as
-  HTML; no highlighter reaches the client.
+  HTML; no highlighter reaches the client. The theme is `vitesse-black` with
+  its comment colour changed, defined once in `src/lib/code-theme.ts` and used
+  by both highlighters (the MDX one and `highlight.ts`).
 - **`optimizePackageImports`** in `next.config.ts` for lucide-react, recharts,
   date-fns and three Radix primitives.
 - **Cache headers.** `/sound/*` gets a year immutable. `/media/*` gets a month
@@ -1280,6 +1317,12 @@ only describe main-thread work.
   anywhere in the relay sequence: 4.95:1. Card captions over artwork: 4.72:1 for
   the mono label and 18:1 for the title, both against the scrim rather than the
   picture.
+- **Comments in code are legible.** The highlighter's own theme draws them at
+  4.21:1 on black. They are 7.07:1 here. The stock audit could not have seen
+  it, and section 18 has why.
+- **A region that scrolls sideways can be reached from the keyboard.** The
+  pipeline table is wider than a phone because of its file paths, so its
+  scroller carries a tab stop, a role and a label, as the dashboard tables do.
 - **Errors are not red.** An invalid field is marked with a mono `error —`
   prefix and a message that says what broke and what to do.
 - **Under reduced motion nothing animates**, no scene mounts, the preloader
@@ -1294,7 +1337,7 @@ only describe main-thread work.
 
 ## 14. The data pipeline scripts
 
-Four scripts fetch published sources and commit the result, so no page ever
+These scripts fetch published sources and commit the result, so no page ever
 depends on a live warehouse or an API being awake.
 
 | Script | Source | Output |
@@ -1305,6 +1348,7 @@ depends on a live warehouse or an API being awake.
 | `gen:print-inspection` | The EagleEyes production run: `visualizer_results.csv` + `rules.json` | `src/content/data/print-inspection.json` |
 | `gen:earth` | NASA Blue Marble Next Generation + Black Marble masters | `public/media/earth/{day,night,cloud,mask}.webp` |
 | `gen:rag-index` | The Agentic RAG project's own built artifacts (`chunks.json`, `bm25.pkl`, the Qdrant collection) + the cached bge-small weights | `data/rag/`: chunks, vectors, BM25 internals, sources, vocab, the model as two float16 files, and `parity/python-reference.json` |
+| `gen:pipeline` | A checkout of `halfadiii/nyc-subway-reliability` | `src/content/data/pipeline-excerpts.json`: five code excerpts cut by marker lines, with the file, the line and the commit each came from |
 | `gen:netflix` | The engagement repo's `data/model/*.csv` (Netflix What We Watched + Top 10, modelled) | `src/content/data/netflix-engagement.json`, 40 KB of aggregates; the 517,500-row weekly table never ships |
 
 ### The bank marketing rebuild
@@ -1346,6 +1390,22 @@ GitHub's 50 MB warning). Chosen by measurement: float32 (133 MB) and float16
 (34 MB) changed the top 30 on 23 of 24 and a top five on one.
 `data/rag/parity/` is test evidence, and is left out of the function's file
 tracing in `next.config.ts` on purpose.
+
+### The pipeline excerpts
+
+`scripts/build-pipeline-excerpts.py` exists so that nobody types the code
+shown on the subway case study. Each excerpt is named by the line it starts
+at and the line it ends at, matched whole with indentation ignored, so it
+survives lines being added above it; a marker that has gone is an error, not
+an empty block. The common indentation is removed and nothing else changes.
+It refuses to run if the excerpted files have uncommitted changes in that
+checkout, because then the page would show code nobody can find.
+
+`npm run check:pipeline` writes nothing: it fails if a committed excerpt has
+drifted from the repository, or if either code block in the case study's
+prose is not a run of consecutive lines from the file it came from. It can
+only run on a machine with that checkout, so it is a thing to run after the
+subway repository changes, not a build step.
 
 ### The rainfall regression, and the null result
 
@@ -1862,6 +1922,46 @@ each type the two tend to rise together (the four most-watched films rank 1-4
 on both), with clear exceptions (*Stranger Things: Tales From '85* has the
 second-largest series trailer and ranks seventh of ten series on hours).
 
+### Phase 11: the subway copy catches up with its repository (10-04)
+
+He shared a data engineering job description and asked which project fitted
+it. The subway pipeline did, apart from one phrase, "incremental data flow",
+so that was built into the repository the same day: two incremental dbt
+models proved row for row against a full rebuild, and a data catalog generated
+from the project (`259a21a`, then `b6b6091` in
+`halfadiii/nyc-subway-reliability`). His interview explainer for the project
+was rewritten around it.
+
+Reading the repository that closely showed that the site had been describing
+a different project. He was told, and said to correct it. What changed here:
+
+- **The card** (`projects.ts`): stack and detail lines, as section 7 records.
+- **The case study** (`work/nyc-subway-reliability.mdx`): the landing zone is
+  files and DuckDB, with the BigQuery path stated as written and not run; the
+  inference is three numbered conditions, including the one about the newest
+  snapshot that the old text left out; a new section, `Only the new work`,
+  for the incremental models and the test that holds them; an `Outcome` with
+  the run's real figures (1.6M observations, 9,344 arrivals, 7,789 headways,
+  the A at 59 St–Columbus Circle); and a `What I'd change` that says the
+  poller is not hosted and BigQuery has not been run, instead of asking for a
+  sensitivity analysis the repository already has.
+- **The pipeline section** (`pipeline.ts`, `Pipeline.tsx`): stage 02 is
+  `Landing`, not `BigQuery landing`; stage 05 says the regression declines on
+  the data so far; stage 06 no longer claims the site reads the marts, because
+  it does not. The heading's meta line says `duckdb`. All five code blocks are
+  the repository's own (section 14).
+- **The highlighter theme, a numbered list in MDX, and a keyboard-reachable
+  table scroller**: three things the corrected page needed (sections 12, 6
+  and 13).
+
+Checked on a production build: every stage panel opens with its real file
+path and code; zero axe violations on the case study at desktop and 320px,
+and with each of the five code panels open, which the stock audit never
+looks at; no sideways overflow at 320px; the 46 Playwright tests pass; home
+page JS 184.85 to 184.89 kB gzip.
+
+The résumé PDF served at `/resume` still carries the old line. Section 19.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -2128,6 +2228,36 @@ for the full record" as plain text, because that one is an instruction. Checked
 by clicking it for all seven planets in a real browser: the five with a live
 version each landed on the right page.
 
+### Copy that had outrun the project (10-04)
+
+For a month the subway card said the pipeline ingested "into BigQuery" and
+ran "a weather regression quantifying rain's measured effect"; the case study
+said "rows land in a BigQuery table"; and the pipeline section invited the
+reader to "open a stage to see what it does and the code that runs it", then
+showed BigQuery-dialect SQL under file names like `ingest/poll_feeds.py` that
+exist nowhere. The file's own comment called those blocks "representative".
+
+All of it was written by 09-04, from the résumé's description of the
+project. The repository was committed three days later, and its README is
+careful about exactly these things: BigQuery is "written but not exercised against a
+live project", and the rain regression "will keep refusing" until it has
+weeks of data. Nobody went back and reconciled the two. It was found a month
+on, and only because a job description sent somebody to read the repository
+line by line.
+
+Two lessons. When a project's own README says "not yet", every page that
+describes the project says the same, and it is worth diffing them when the
+README is written. And "representative" code beside a real file name is a
+claim about that file. If the code is not cut from the repository by a
+script, it will not match the repository.
+
+The same change turned up a third thing, older than either. The highlighter's
+theme draws comments at 4.21:1, and the stage panels had carried comments
+since the first build. Every audit passed, because the audit runs with the
+panels closed and there was no comment anywhere else. The first comment in an
+always-visible block failed at once. An audit only covers the states it
+visits: open the dialog, then run it.
+
 ### The measurement lessons
 
 - **Bounding boxes over-report contrast failures.** They count the empty half of
@@ -2176,6 +2306,14 @@ version each landed on the right page.
    Adding a `url` to an entry turns it into a link.
 6. **The résumé PDF disagrees with the site on two job titles.** By his
    instruction. The PDF is his to reissue.
+
+   **Since 2026-10-04 it also disagrees on the subway project, and that one is
+   not by instruction.** `public/aditya-aryan-resume.pdf` still says the
+   pipeline is built "on GCP", ingesting "into BigQuery", with a regression
+   "quantifying rain's measured effect". The site and the repository now say
+   DuckDB, BigQuery written and not yet run, and a null on rain. He was told,
+   and given a line that is true today. The other way to close it is to run
+   the pipeline on BigQuery once, which needs a GCP project of his.
 7. **`DEEPSEEK_API_KEY` in Vercel.** Until it is set, `/demo/rag` retrieves
    and then says answering is switched off. Vercel → project → Settings →
    Environment Variables → Production, then redeploy. The key is prepaid, so

@@ -4,12 +4,13 @@ hook: The MTA never records when a train actually arrives. This pipeline infers 
 period: Aug 2026 – present
 stack:
   - Python
-  - BigQuery
   - dbt
-  - GCP
+  - DuckDB
+  - GitHub Actions
 summary: >-
   Eight real-time MTA feeds, polled every thirty seconds, turned into inferred
-  arrivals, excess wait time, and a measured answer to what rain costs a rider.
+  arrivals and excess wait time, with an honest null on what rain costs a
+  rider.
 ---
 
 ## Context
@@ -51,81 +52,139 @@ distribution of gaps, not their average.
 
 ## Approach
 
-Polling is deliberately dumb and deliberately frequent. A scheduled job pulls
-all eight endpoints every thirty seconds, decodes the protobuf, flattens it, and
+Polling is deliberately dumb and deliberately frequent. A poller pulls all
+eight endpoints every thirty seconds, decodes the protobuf, flattens it, and
 appends. Nothing is deduplicated or corrected on the way in.
 
 ```python
-def poll(session, feed_id: str) -> list[dict]:
-    """One poll of one feed, stamped with the instant it was observed."""
-    observed_at = time.time()
-    message = gtfs_realtime_pb2.FeedMessage()
-    message.ParseFromString(session.get(URL + FEEDS[feed_id]).content)
-    ...
+def flatten(feed_id: str, message: Any, fetched_at: float) -> Iterator[dict]:
+    """One decoded feed message -> one dict per predicted stop.
+
+    A generator rather than a list: the numbered feed carries a few thousand of
+    these per snapshot and they are written straight out to a file, so there is
+    no reason for the whole snapshot to exist twice in memory.
+    """
+    observed_at = int(message.header.timestamp)
+    fetched = int(fetched_at)
 ```
 
-The `observed_at` stamp is the whole design. It is what turns a stream of
-opinions into a timeline of beliefs, and the difference between consecutive
-beliefs is where the arrival hides.
+Every row carries two clocks. `observed_at` is the feed's own timestamp, the
+instant the MTA says it generated that picture, and it is the whole design. It
+is what turns a stream of opinions into a timeline of beliefs, and the
+difference between consecutive beliefs is where the arrival hides. `fetched_at`
+is ours, kept for one job: noticing when the MTA has quietly stopped refreshing.
 
-Rows land in a BigQuery table partitioned by observation date and clustered by
-route and stop. Append-only, so a transformation bug is never a lost
-observation, and partition pruning keeps a day's reconstruction cheap.
+Rows land as compressed files, one per snapshot, filed by date and hour.
+Append-only, so a transformation bug is never a lost observation. The warehouse
+is built from those files with dbt on DuckDB, which means the whole pipeline
+runs from a clone with no cloud account and anyone can check it. The same models
+are written for BigQuery, with a landing table partitioned by day and clustered
+by route and stop. That path is in the repository and has not been run against
+a live project yet.
 
-The inference itself is a window function: for each trip–stop pair, take the
-most recent observation, read the arrival time it was carrying when it vanished,
-and drop anything that disappeared while still comfortably in the future.
+The inference itself is a window function and three conditions:
+
+1. Take the last sighting of each trip–stop pair.
+2. Require that the pair was genuinely absent from a later snapshot of its own
+   feed. In the newest snapshot every prediction is trivially its own last
+   sighting, and without this the pipeline reports arrivals for trains that
+   have not got there yet.
+3. Drop anything that vanished while still more than two minutes from being
+   due. That is a cancellation or a re-route, not an arrival.
 
 ```sql
-select
-    trip_id,
-    stop_id,
-    predicted_arrival as inferred_arrival,
-    observed_at       as last_seen_at
-from ranked
-where recency = 1
-  and predicted_arrival <= timestamp_add(observed_at, interval 120 second)
+from {{ ref('int_last_sightings') }}
+
+-- It vanished, rather than us stopping looking. See (2) above.
+where has_vanished
+  -- It was about to happen. See (3) above.
+  and last_predicted_arrival <= {{
+        dbt.dateadd('second', var('arrival_grace_seconds'), 'last_seen_at')
+      }}
 ```
 
 From there it is dbt. Inferred arrivals become headways; headways become excess
 wait by line, station, and hour, in fact tables separated from their dimensions
 so the metric can be sliced without rewriting the aggregation. Every model
-carries tests for uniqueness, nullity, and referential integrity, and a failing
-test stops the run rather than publishing a quietly wrong number.
+carries tests for uniqueness, nullity, and referential integrity, 59 of them in
+all, and a failing test stops the run rather than publishing a quietly wrong
+number.
 
 The weather layer joins hourly precipitation to excess wait and fits a
 regression per line, controlling for hour of day. It reports confidence
 intervals alongside the coefficient, because a slope without an interval is a
-claim rather than a measurement.
+claim rather than a measurement. And it declines to report at all when the data
+cannot support an answer, which on the 150 minutes collected so far is every
+line.
+
+## Only the new work
+
+The first version rebuilt every table from every file on every run, which gets
+slower each day it succeeds. The two models that touch every observation now
+read only what is new.
+
+Loading steps back three hours from the newest row it holds and reads from
+there, because a file can land late, and "everything newer than my newest row"
+would skip it without a word. A unique key discards the overlap.
+
+The inference is the harder half, because the question is about absence. A
+train in the last snapshot of one run has not vanished; it becomes an arrival in
+the next run without ever being observed again. A model that only looks at new
+rows never goes back to it, and loses every arrival at the edge of every run. So
+each run goes back over the pairs seen since the previous run's watermark,
+including the ones that were still pending.
+
+None of that is worth having unless the result is the same. A test builds the
+same raw files in several sittings and in one pass and compares the warehouses
+row for row; breaking the rule on purpose fails five of its nine cases. On a
+week-sized copy of the collected data, 11.2 million observations, adding the
+last ten minutes takes 11 seconds against 30 for a full rebuild. That is a
+simulation of a week, not a week of collection.
 
 ## Outcome
 
-The pipeline produces a governed answer to a question the raw feed cannot
-answer: for a given line, at a given hour, in a given amount of rain, how much
-longer does a rider wait than the timetable implies.
+The pipeline produces a defensible answer to a question the raw feed cannot
+answer: for a given line, at a given platform and hour, how much longer does a
+rider wait than an evenly spread service would ask of them.
+
+Measured on a 150-minute run of all eight feeds: 1.6 million observations,
+9,344 inferred arrivals, 7,789 headways. The worst hour it found was the A at
+59 St–Columbus Circle, overnight: a mean headway of 20.6 minutes and 8.9 minutes
+of excess wait.
 
 Three properties matter more than any single figure:
 
 - **The arrival is defensible.** Cancellations and re-routes are excluded by a
-  stated rule, not by a threshold that happened to look tidy.
+  stated rule, and the rule has been measured: moving its threshold sixteenfold
+  moves excess wait by 3.8%.
 - **The metric is the right one.** Excess wait reflects how riders actually
   experience service; mean headway does not.
 - **The uncertainty ships with the number.** Every coefficient on this site
-  carries its interval and its sample size.
+  carries its interval and its sample size, and a null is reported as a null.
 
-The figures rendered on the home page come from a snapshot committed to this
-repository and dated on the chart, rather than a live query. A portfolio should
-not depend on a warehouse being awake.
+The rain figures below come from a snapshot committed to this site's repository
+and dated on the chart, built from the MTA's published monthly metrics rather
+than from the pipeline's own tables. A portfolio should not depend on a
+warehouse being awake.
 
 ## What I'd change
 
-The inference currently runs as a batch pass over a day of observations. That is
-correct and cheap, but it means the site is describing yesterday. A streaming
-version — the same window logic against a bounded buffer — would make the same
-guarantee in near real time, and the ingest already stamps everything it needs.
+The poller is not hosted. It is containerised and built to run for weeks, but
+history only accumulates while it is running, and the rain question needs weeks
+of it. That is the next thing to do, and a thirty-second cadence rules out the
+simplest scheduler, whose floor is a minute.
+
+The BigQuery path has not been run. The table design and the loader are written,
+and the models use dbt's cross-database functions so there is one definition of
+an arrival and not two. Until it has run against a live project, that is a
+design and not a result.
+
+The inference still runs in batches. Each run only handles what is new, but a
+run has to be started. A streaming version — the same window logic against a
+bounded buffer — would make the same guarantee continuously, and the ingest
+already stamps everything it needs.
 
 The cancellation rule is also a single threshold: vanish more than two minutes
-before you were due and you are not an arrival. It is defensible and it is
-documented, but it is a threshold, and thresholds deserve sensitivity analysis.
-Fitting that rule against a labelled sample of known service changes would turn
-a judgement call into a measured one.
+before you were due and you are not an arrival. It is defensible, documented,
+and now measured, but it is a threshold. Fitting it against a labelled sample of
+known service changes would turn a judgement call into a measured one.

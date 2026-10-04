@@ -6,12 +6,20 @@ export const projects: Project[] = [
     title: "NYC subway reliability pipeline",
     hook: "The MTA never records when a train actually arrives. This pipeline infers it.",
     period: "Aug 2026 – present",
-    stack: ["Python", "BigQuery", "dbt", "GCP"],
+    // What the repository actually runs on. Until 2026-10-04 this said
+    // BigQuery and GCP, following the résumé line the entry was first written
+    // from. The BigQuery path is written and has never been run, and the
+    // repository's own README says so. The same goes for the rain line below.
+    stack: ["Python", "dbt", "DuckDB", "GitHub Actions"],
+    // Four lines, not five. The record this is shown in sits on the hero, and
+    // on a 768px-tall screen its top is already level with the bottom of the
+    // name; a fifth line moved it 53px further up, into the letters. The rain
+    // result (a null, on eleven years of MTA figures) is on the case study.
     detail: [
-      "Ingests eight real-time MTA feeds every 30 seconds into BigQuery.",
+      "Polls eight real-time MTA feeds every 30 seconds and keeps every snapshot untouched.",
       "Derives actual arrivals from predictions that vanish — the source never writes an arrival event.",
-      "Models excess wait time by line and hour in dbt star-schema tables.",
-      "Runs a weather regression quantifying rain's measured effect on rider wait, with confidence intervals.",
+      "Loads only what is new on each run, with tests proving the result matches a full rebuild row for row.",
+      "Models excess wait in dbt star-schema tables on DuckDB; the BigQuery path is written and not yet run.",
     ],
     live: {
       href: "/demo/subway",

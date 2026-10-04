@@ -1,0 +1,37 @@
+{
+  "repository": "https://github.com/halfadiii/nyc-subway-reliability",
+  "commit": "b6b6091",
+  "generatedAt": "2026-10-04",
+  "excerpts": {
+    "ingest": {
+      "lang": "python",
+      "filename": "ingest/poller.py",
+      "line": 170,
+      "source": "def round_once(self) -> int:\n    started = time.time()\n    with ThreadPoolExecutor(max_workers=len(FEEDS)) as pool:\n        results = list(pool.map(self.fetch, FEEDS))\n\n    written = 0\n    lag_max = 0\n    for feed_id, payload, fetched_at in results:\n        if payload is None:\n            continue\n        try:\n            count = self.write(feed_id, payload, fetched_at)\n            written += count\n            if count:\n                lag = int(fetched_at) - self.last_seen[feed_id]\n                lag_max = max(lag_max, lag)\n        except Exception as exc:  # noqa: BLE001\n            self.failures[feed_id] = self.failures.get(feed_id, 0) + 1\n            print(f\"    {feed_id:9s} decode/write failed: {exc}\", flush=True)"
+    },
+    "landing": {
+      "lang": "python",
+      "filename": "ingest/poller.py",
+      "line": 153,
+      "source": "when = datetime.fromtimestamp(observed_at, tz=timezone.utc).astimezone(NY)\ndirectory = self.out_dir / f\"dt={when:%Y-%m-%d}\" / f\"hour={when:%H}\"\ndirectory.mkdir(parents=True, exist_ok=True)\npath = directory / f\"{feed_id}-{observed_at}.ndjson.gz\"\n\n# Written to a temporary name and moved into place, so a reader can\n# never open a file that is still being written to. os.replace is\n# atomic on the same filesystem, on Windows as well as POSIX.\nstaging = path.with_suffix(\".tmp\")\nwith gzip.open(staging, \"wt\", encoding=\"utf-8\") as handle:\n    for row in rows:\n        handle.write(json.dumps(row, separators=(\",\", \":\")) + \"\\n\")\nstaging.replace(path)\nreturn len(rows)"
+    },
+    "arrival": {
+      "lang": "sql",
+      "filename": "transform/models/intermediate/int_inferred_arrivals.sql",
+      "line": 48,
+      "source": "select\n    service_date_raw,\n    feed_id,\n    route_id,\n    trip_id,\n    train_id,\n    stop_id,\n    station_id,\n    platform_direction,\n    direction,\n\n    last_predicted_arrival as inferred_arrival,\n    last_seen_at,\n\n    -- How far ahead the arrival still was when the record vanished. Near zero\n    -- is a train pulling in; strongly negative is a train that was already\n    -- overdue, which is still an arrival and still counts.\n    lead_seconds,\n\n    -- How many snapshots this pair appeared in before it went. One is a pair\n    -- seen exactly once, which is a weaker observation than one tracked across\n    -- twenty polls, and worth being able to filter on.\n    observations_of_pair,\n\n    scheduled_track,\n    actual_track\n\nfrom {{ ref('int_last_sightings') }}\n\n-- It vanished, rather than us stopping looking. See (2) above.\nwhere has_vanished\n  -- It was about to happen. See (3) above.\n  and last_predicted_arrival <= {{\n        dbt.dateadd('second', var('arrival_grace_seconds'), 'last_seen_at')\n      }}"
+    },
+    "models": {
+      "lang": "sql",
+      "filename": "transform/models/marts/fct_excess_wait.sql",
+      "line": 48,
+      "source": "select\n    service_date_raw,\n    route_id,\n    stop_id,\n    station_id,\n    platform_direction,\n    service_hour,\n    hour_of_day,\n    day_of_week,\n\n    count(*)                                       as headways,\n    avg(headway_minutes)                           as mean_headway_minutes,\n    min(headway_minutes)                           as min_headway_minutes,\n    max(headway_minutes)                           as max_headway_minutes,\n\n    -- The wait a rider turning up at random actually experiences.\n    sum(headway_minutes * headway_minutes) / (2 * sum(headway_minutes))\n                                                   as rider_wait_minutes,\n    -- What that wait would be if the same number of trains were evenly spread.\n    avg(headway_minutes) / 2                       as even_wait_minutes,\n    -- The gap between those two. Zero on a perfectly regular service, and it\n    -- cannot be negative: E[H2] >= E[H]^2 for any distribution, which makes\n    -- this the variance term and is why `tests/assert_excess_wait_non_negative`\n    -- is a real assertion about the maths rather than a guess about the data.\n    sum(headway_minutes * headway_minutes) / (2 * sum(headway_minutes))\n        - avg(headway_minutes) / 2                 as excess_wait_minutes\n\nfrom headways\ngroup by\n    service_date_raw,\n    route_id,\n    stop_id,\n    station_id,\n    platform_direction,\n    service_hour,\n    hour_of_day,\n    day_of_week"
+    },
+    "weather": {
+      "lang": "python",
+      "filename": "analysis/rain_regression.py",
+      "line": 103,
+      "source": "def fit_route(frame: pd.DataFrame) -> dict:\n    \"\"\"One route. Returns either a fitted result or the reason there is none.\"\"\"\n    import statsmodels.formula.api as smf\n\n    observations = len(frame)\n    wet_hours = int(frame[\"is_wet\"].sum())\n\n    if observations < MIN_OBSERVATIONS:\n        return {\"status\": \"insufficient\", \"why\": f\"{observations} route-hours\", \"n\": observations}\n    if wet_hours < MIN_WET_HOURS:\n        return {\"status\": \"insufficient\", \"why\": f\"{wet_hours} wet hours\", \"n\": observations}\n    if frame[\"precip_mm\"].nunique() < 2:\n        return {\"status\": \"insufficient\", \"why\": \"no variation in rainfall\", \"n\": observations}\n\n    # Hour of day only enters as a control where there is more than one of\n    # them; with a single hour the dummy set is collinear with the intercept.\n    formula = \"excess_wait_minutes ~ precip_mm\"\n    if frame[\"hour_of_day\"].nunique() > 1:\n        formula += \" + C(hour_of_day)\"\n\n    model = smf.ols(formula, data=frame).fit(cov_type=\"HC3\")\n    low, high = model.conf_int().loc[\"precip_mm\"]\n    return {\n        \"status\": \"fitted\",\n        \"minutes_per_mm\": float(model.params[\"precip_mm\"]),\n        \"ci_low\": float(low),\n        \"ci_high\": float(high),\n        \"p_value\": float(model.pvalues[\"precip_mm\"]),\n        \"n\": observations,\n        \"wet_hours\": wet_hours,\n        \"r_squared\": float(model.rsquared),\n        # An interval that contains zero is a result. It is reported as one.\n        \"straddles_zero\": bool(low <= 0 <= high),\n    }"
+    }
+  }
+}

@@ -4,7 +4,7 @@ import snapshot from "@/content/data/subway-wait-snapshot.json";
  * The committed snapshot behind §6.6.
  *
  * The chart reads a file in the repository rather than a live warehouse, so the
- * page never depends on BigQuery being awake. `scripts/build-wait-snapshot.py`
+ * page never depends on one being awake. `scripts/build-wait-snapshot.py`
  * rebuilds it from two published sources; with `points` empty the section
  * renders an honest pending state instead of inventing numbers.
  */

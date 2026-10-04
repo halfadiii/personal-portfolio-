@@ -31,7 +31,7 @@ export async function Pipeline() {
           id="pipeline"
           index="01"
           label="subway pipeline"
-          meta="8 feeds / 30s / bigquery / dbt"
+          meta="8 feeds / 30s / duckdb / dbt"
           title="The MTA never records when a train actually arrives."
         >
           <p className="measure text-lead text-steel">
@@ -52,7 +52,16 @@ export async function Pipeline() {
           <summary className="label-mono text-signal cursor-pointer px-4 py-3">
             Read the pipeline as a table
           </summary>
-          <div className="overflow-x-auto">
+          {/* The file paths make this wider than a phone, so it scrolls, and a
+              region that scrolls has to be reachable from the keyboard.
+              `relative` because the caption below is absolutely positioned,
+              and in a scroller that is not, it widens the page instead. */}
+          <div
+            className="relative overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Pipeline stages and their source files, scrollable"
+          >
             <table className="text-small w-full border-collapse text-left">
               <caption className="sr-only">
                 Stages of the NYC subway reliability pipeline, in order.

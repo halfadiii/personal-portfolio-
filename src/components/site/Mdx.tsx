@@ -4,6 +4,7 @@ import rehypePrettyCode from "rehype-pretty-code";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import type { MDXComponents } from "mdx/types";
+import { codeTheme } from "@/lib/code-theme";
 
 /**
  * MDX rendered on the server. Shiki runs through rehype-pretty-code at render
@@ -29,6 +30,16 @@ const components: MDXComponents = {
     <ul
       {...props}
       className="measure mt-5 flex list-none flex-col gap-2.5 p-0"
+    />
+  ),
+  // Numbered, for the one place the order is the point: a code block below the
+  // list refers to its items by number. Same column as the dashes of `ul`, with
+  // a counter where the dash would be. The number is content rather than
+  // decoration, so it takes the body colour, not the hairline one.
+  ol: (props) => (
+    <ol
+      {...props}
+      className="measure [&>li]:before:text-steel mt-5 flex list-none flex-col gap-2.5 p-0 [counter-reset:item] [&>li]:[counter-increment:item] [&>li]:before:content-[counter(item)]"
     />
   ),
   li: (props) => (
@@ -74,7 +85,7 @@ export function Mdx({ source }: { source: string }) {
             [
               rehypePrettyCode,
               {
-                theme: "vitesse-black",
+                theme: codeTheme,
                 keepBackground: false,
                 defaultLang: "text",
               },

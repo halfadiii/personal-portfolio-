@@ -30,6 +30,8 @@
     "gen:print-inspection": "python scripts/build-print-inspection.py",
     "gen:rag-index": "python scripts/build-rag-index.py",
     "gen:netflix": "python scripts/build-netflix-dashboard.py",
+    "gen:pipeline": "python scripts/build-pipeline-excerpts.py",
+    "check:pipeline": "python scripts/build-pipeline-excerpts.py --check",
     "audit": "node scripts/audit.mjs"
   },
   "dependencies": {
