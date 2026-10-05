@@ -85,10 +85,12 @@ Without the scene the same six chapters are simply stacked down the page.
 
 ### The bank marketing dashboard
 
-Rebuilt from part-6 of `project/bank_marketing_strategy-main`, running in the
-browser instead of in Dash. `scripts/build-bank-dashboard.py` replays the
-notebooks' own cleaning, 3NF normalisation, and three classifiers against
-`bank-full.csv`, then writes:
+Rebuilt from part-6 of the bank project
+([halfadiii/bank_marketing_strategy](https://github.com/halfadiii/bank_marketing_strategy)),
+running in the browser instead of in Dash. `scripts/build-bank-dashboard.py`
+replays the notebooks' own cleaning, tests and three classifiers against
+`bank-full.csv`, checks its rows and scores against what the notebooks
+themselves produced, and only then writes:
 
 - `public/data/bank-marketing.bin` — 43,193 rows, columnar, 844 KB
 - `src/content/data/bank-marketing.json` — schema, categories, model metrics
@@ -100,12 +102,13 @@ Every figure on that page came out of that script. Nothing was typed in by hand.
 
 | Model               | Accuracy | F1     | ROC AUC |
 | ------------------- | -------- | ------ | ------- |
-| Logistic regression | 0.9029   | 0.4632 | 0.9095  |
-| Decision tree       | 0.8679   | 0.4501 | 0.6930  |
-| Gradient boosting   | 0.9051   | 0.5024 | 0.9162  |
+| Logistic regression | 0.9027   | 0.4606 | 0.9099  |
+| Decision tree       | 0.8713   | 0.4669 | 0.7036  |
+| Gradient boosting   | 0.9064   | 0.5100 | 0.9164  |
 
 Re-run it with `python scripts/build-bank-dashboard.py` (needs pandas,
-scikit-learn, scipy).
+scikit-learn, scipy, and the bank repository cloned beside this one with its
+notebooks run).
 
 ---
 

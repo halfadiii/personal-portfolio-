@@ -1,11 +1,21 @@
 """
 Turns the bank marketing project into the data the live dashboard page reads.
 
-This is not a re-analysis. It replays the steps the notebooks in
-`project/bank_marketing_strategy-main` actually perform — the same cleaning, the
-same normalisation, the same three classifiers — and writes out the results, so
-every figure on `/work/bank-marketing/dashboard` traces back to code that was
-run rather than to a number someone typed.
+This is not a re-analysis. It replays the project's own notebooks, which live in
+their repository beside this one (`../../bank_marketing_strategy`, on GitHub as
+halfadiii/bank_marketing_strategy): the cleaning of part-1_part-2, and the
+tests and three classifiers of part-5.
+
+Then it checks itself against them, and writes nothing if the check fails. The
+cleaned table has to equal what the notebooks loaded into their database, row
+for row. The scores have to equal the ones part-5 printed. So every figure on
+`/dashboard/bank-marketing` is the figure the notebooks show on GitHub, not a
+second opinion.
+
+That check exists because for a year it would have failed. Until the notebooks
+were repaired on 2026-10-05 they modelled 3,660 mis-joined rows, and this
+script quietly did what they were meant to do instead (MASTER_FILE.md, section
+18). Run the notebooks first; the command is in that repository's README.
 
 Outputs:
   public/data/bank-marketing.bin    columnar rows, fetched by the dashboard
@@ -19,7 +29,8 @@ from __future__ import annotations
 
 import json
 import pathlib
-import struct
+import re
+import sqlite3
 
 import numpy as np
 import pandas as pd
@@ -36,13 +47,8 @@ from sklearn.tree import DecisionTreeClassifier
 from scipy.stats import chi2_contingency, ttest_ind
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SOURCE = (
-    ROOT.parent
-    / "project"
-    / "bank_marketing_strategy-main"
-    / "bank_marketing_strategy-main"
-    / "bank-full.csv"
-)
+NOTEBOOKS = ROOT.parent.parent / "bank_marketing_strategy"
+SOURCE = NOTEBOOKS / "bank-full.csv"
 BIN_OUT = ROOT / "public" / "data" / "bank-marketing.bin"
 META_OUT = ROOT / "src" / "content" / "data" / "bank-marketing.json"
 
@@ -60,7 +66,7 @@ def load_and_clean() -> tuple[pd.DataFrame, dict]:
     df = raw.copy()
     df["y"] = (df["y"] == "yes").astype(int)
 
-    # part-1: campaign and day showed no useful relationship with y.
+    # part-1: campaign and day are only weakly related to y.
     df = df.drop(columns=["campaign", "day"])
     steps.append({"step": "dropped campaign and day", "rows": len(df)})
 
@@ -81,16 +87,19 @@ def load_and_clean() -> tuple[pd.DataFrame, dict]:
     )
 
     # part-1: unknown contact is reassigned in proportion to the known split.
+    # The notebook's own arithmetic and its own order (the first of the unknown
+    # rows become telephone), because which rows get which label moves the
+    # models in the third decimal place.
     counts = df["contact"].value_counts()
     unknown = int(counts.get("unknown", 0))
     cellular = int(counts.get("cellular", 0))
     telephone = int(counts.get("telephone", 0))
     known = cellular + telephone
     if unknown and known:
-        cellular_add = int(round(unknown * cellular / known))
+        telephone_add = int(unknown * (telephone / known))
         unknown_index = df.index[df["contact"] == "unknown"]
-        df.loc[unknown_index[:cellular_add], "contact"] = "cellular"
-        df.loc[unknown_index[cellular_add:], "contact"] = "telephone"
+        df.loc[unknown_index[:telephone_add], "contact"] = "telephone"
+        df.loc[unknown_index[telephone_add:], "contact"] = "cellular"
     steps.append(
         {
             "step": "reassigned unknown contact in proportion",
@@ -232,12 +241,30 @@ def fit_models(df: pd.DataFrame) -> list[dict]:
         key=lambda pair: pair[1],
         reverse=True,
     )[:10]
+
+    # Call duration is only known once the call is over, so part-5 fits the
+    # same model on the same rows without it. The gap is the project's point.
+    scaler_nd = StandardScaler()
+    gb_nd = GradientBoostingClassifier(random_state=42)
+    gb_nd.fit(scaler_nd.fit_transform(x_train.drop(columns=["duration"])), y_train)
+    x_test_nd = scaler_nd.transform(x_test.drop(columns=["duration"]))
+    without = score(
+        "Gradient boosting",
+        "The same model and rows, without call duration.",
+        gb_nd.predict(x_test_nd),
+        gb_nd.predict_proba(x_test_nd)[:, 1],
+    )
+
     for result in results:
         if result["name"] == "Gradient boosting":
             result["topFeatures"] = [
                 {"feature": name, "importance": round(float(value), 4)}
                 for name, value in importance
             ]
+            result["withoutDuration"] = {
+                key: without[key]
+                for key in ("accuracy", "precision", "recall", "f1", "rocAuc")
+            }
 
     return results
 
@@ -284,11 +311,91 @@ def run_tests(df: pd.DataFrame) -> list[dict]:
     return tests
 
 
+def notebook_output(name: str, cell_id: str) -> str:
+    """The text one cell of a saved notebook printed."""
+    notebook = json.loads((NOTEBOOKS / name).read_text(encoding="utf-8"))
+    for cell in notebook["cells"]:
+        if cell.get("id") == cell_id:
+            return "".join(
+                "".join(output.get("text", []))
+                for output in cell.get("outputs", [])
+                if output.get("output_type") == "stream"
+            )
+    raise SystemExit(f"{name} has no cell called {cell_id}")
+
+
+def check_against_notebooks(df: pd.DataFrame, models: list[dict]) -> None:
+    """
+    Fail unless this script and the notebooks agree.
+
+    Two things are compared. The cleaned rows, against the view the notebooks
+    built in their own database. And the scores, against what part-5 printed
+    when it was last run and saved.
+    """
+    database = NOTEBOOKS / "mydatabase.db"
+    if not database.exists():
+        raise SystemExit(
+            f"{database} is missing. Run the notebooks first (the command is in "
+            "that repository's README), so there is something to check against."
+        )
+
+    connection = sqlite3.connect(database)
+    try:
+        theirs = pd.read_sql_query("SELECT * FROM calls ORDER BY id", connection)
+    finally:
+        connection.close()
+    try:
+        pd.testing.assert_frame_equal(
+            df, theirs.drop(columns=["id"]), check_dtype=False
+        )
+    except AssertionError as difference:
+        raise SystemExit(
+            f"the cleaned rows differ from the notebooks' database:\n{difference}"
+        )
+
+    number = r"(-?\d+\.\d+)"
+    keys = ("accuracy", "precision", "recall", "f1", "rocAuc")
+
+    printed = notebook_output("part-5.ipynb", "scores")
+    for model in models:
+        row = re.search(
+            rf"^{model['name']}\s+" + r"\s+".join([number] * 5) + r"\s*$",
+            printed,
+            flags=re.MULTILINE | re.IGNORECASE,
+        )
+        ours = [model[key] for key in keys]
+        theirs_row = [float(value) for value in row.groups()] if row else None
+        if theirs_row != ours:
+            raise SystemExit(
+                f"{model['name']}: part-5 printed {theirs_row}, this script got {ours}"
+            )
+
+    printed = notebook_output("part-5.ipynb", "without-duration")
+    without = next(m for m in models if "withoutDuration" in m)["withoutDuration"]
+    for label, key in zip(("accuracy", "precision", "recall", "f1", "roc_auc"), keys):
+        row = re.search(
+            rf"^{label}\s+" + r"\s+".join([number] * 3) + r"\s*$",
+            printed,
+            flags=re.MULTILINE,
+        )
+        theirs_value = float(row.group(2)) if row else None
+        if theirs_value != without[key]:
+            raise SystemExit(
+                f"without duration, {label}: part-5 printed {theirs_value}, "
+                f"this script got {without[key]}"
+            )
+
+    print(f"checked            {len(df):,} rows equal the notebooks' database")
+    print("checked            every score equals the one part-5 printed")
+
+
 def main() -> None:
     if not SOURCE.exists():
         raise SystemExit(f"source dataset not found at {SOURCE}")
 
     df, cleaning = load_and_clean()
+    models = fit_models(df)
+    check_against_notebooks(df, models)
     payload, schema = encode(df)
 
     BIN_OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -316,7 +423,7 @@ def main() -> None:
             "medianBalance": float(df["balance"].median()),
             "meanDuration": round(float(df["duration"].mean()), 2),
         },
-        "models": fit_models(df),
+        "models": models,
         "tests": run_tests(df),
     }
 

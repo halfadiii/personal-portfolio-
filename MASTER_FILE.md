@@ -13,7 +13,7 @@ what you are looking at, section 5 to find your way around the files, and
 sections 17 and 18 before you change anything, because most of the code that
 looks strange in here is code that is the way it is for a measured reason.
 
-Last updated: 2026-10-04.
+Last updated: 2026-10-05.
 
 ---
 
@@ -193,7 +193,7 @@ npm test             # Playwright: axe on every route + the acceptance checklist
 | `npm run gen:sounds` | Synthesise the two UI ticks |
 | `npm run gen:earth` | Fetch and prepare the four Earth maps from NASA masters |
 | `npm run gen:fonts` | Subset the three variable faces (needs Python, fonttools, brotli) |
-| `npm run gen:dashboard` | Rebuild the bank marketing data (needs pandas, scikit-learn, scipy) |
+| `npm run gen:dashboard` | Rebuild the bank marketing data (needs pandas, scikit-learn, scipy, and the bank project's repository beside this one with its notebooks run) |
 | `npm run gen:subway-map` | Rebuild the network from the MTA GTFS feed |
 | `npm run gen:l-line` | Rebuild `l-line.json`: the L's stations in order, with their real spacing, out of the network data |
 | `npm run gen:wait-snapshot` | Rebuild the rainfall regression snapshot |
@@ -417,9 +417,14 @@ was typed in by hand.
 
 | Model | Accuracy | F1 | ROC AUC |
 | --- | --- | --- | --- |
-| Logistic regression | 0.9029 | 0.4632 | 0.9095 |
-| Decision tree | 0.8679 | 0.4501 | 0.6930 |
-| Gradient boosting | 0.9051 | 0.5024 | 0.9162 |
+| Logistic regression | 0.9027 | 0.4606 | 0.9099 |
+| Decision tree | 0.8713 | 0.4669 | 0.7036 |
+| Gradient boosting | 0.9064 | 0.5100 | 0.9164 |
+
+Without call duration, which is only known after the call, gradient boosting
+scores 0.7645 ROC AUC. The page says so in a sentence since 2026-10-05.
+These are the numbers the project's own notebooks print: the script that
+writes them refuses to run otherwise (section 14).
 
 ### `/dashboard/netflix-engagement`
 
@@ -670,7 +675,9 @@ demo, and a public repo:
 `github.com/halfadiii/nyc-subway-reliability`, rendered as a secondary text
 link beside the demo button rather than as a second button — somebody who wants
 to read source goes looking, somebody who does not should not step over it), Bank marketing strategy (Jan 2025, dated from its own GitHub history:
-six commits, 11 to 17 January 2025; has a live dashboard), AI print inspection
+six commits, 11 to 17 January 2025, and a seventh on 2026-10-05 that repaired
+it; has a live dashboard and, since the repair, a public repo link,
+`github.com/halfadiii/bank_marketing_strategy`), AI print inspection
 system (has a live demo), Agentic RAG over FDA filings (Sep 2026, dated from
 the project folder; has a live demo and a public repo,
 `github.com/halfadiii/fda-510k-agentic-rag`; it replaced Customer churn
@@ -1389,7 +1396,7 @@ depends on a live warehouse or an API being awake.
 
 | Script | Source | Output |
 | --- | --- | --- |
-| `gen:dashboard` | His own notebooks, replayed against `bank-full.csv` | `public/data/bank-marketing.bin` (43,193 rows, columnar, 844 KB) + `src/content/data/bank-marketing.json` |
+| `gen:dashboard` | The bank project's repository beside this one (`../../bank_marketing_strategy`): its notebooks replayed against `bank-full.csv`, then checked against their database and the scores they printed | `public/data/bank-marketing.bin` (43,193 rows, columnar, 844 KB) + `src/content/data/bank-marketing.json` |
 | `gen:subway-map` | MTA static GTFS feed | `public/data/subway-map.json`, 29 routes, 496 stations |
 | `gen:wait-snapshot` | MTA Customer Journey-Focused Metrics + Central Park hourly rainfall (Open-Meteo) | `src/content/data/subway-wait-snapshot.json` |
 | `gen:print-inspection` | The EagleEyes production run: `visualizer_results.csv` + `rules.json` | `src/content/data/print-inspection.json` |
@@ -1400,13 +1407,25 @@ depends on a live warehouse or an API being awake.
 
 ### The bank marketing rebuild
 
-`scripts/build-bank-dashboard.py` replays the notebooks' own cleaning, 3NF
-normalisation and three classifiers. Cleaning: 45,211 contacts down to 43,193
-(unknown job and education removed, unknown contact method reassigned in
-proportion to the known split, `poutcome` folded into a single other category).
-Normalised to third normal form and loaded into SQLite as a main table joined to
-a previous-outcome table, so the transitive dependency on `poutcome` was removed
-rather than tolerated. Stratified 80/20 split. Needs pandas, scikit-learn, scipy.
+`scripts/build-bank-dashboard.py` replays the notebooks' cleaning, tests and
+three classifiers. Cleaning: 45,211 contacts down to 43,193 (unknown job and
+education removed, unknown contact method reassigned in proportion to the
+known split, `poutcome` folded into a single other category). Stratified 80/20
+split. Needs pandas, scikit-learn, scipy.
+
+It reads the project's repository, cloned beside this one at
+`C:\Adi\PROJECTS\bank_marketing_strategy`, and it needs the notebooks to have
+been run there, because **it checks itself against them and writes nothing if
+the check fails**: its cleaned rows have to equal the `calls` view in the
+notebooks' database, and its scores have to equal the ones `part-5.ipynb`
+printed, to four decimals. The check was tried against a changed row, a
+changed score and a changed without-duration score, and caught all three.
+Section 18 has why it exists.
+
+The database itself is the notebooks' business, not this script's: a main
+table and a previous-outcome table linked by a call id, the second with a row
+only for the 7,912 calls that had a previous campaign. It is not a
+third-normal-form fix and nothing here says so any more.
 
 ### The RAG index, and why the demo is a port
 
@@ -2057,6 +2076,49 @@ Checked: zero axe violations on all eight pages at desktop and 320px, both as
 they load and with every folded section opened; no sideways overflow; the 46
 Playwright tests and the RAG parity test pass.
 
+### Phase 13: the bank project is repaired, and the site follows it (10-05)
+
+Writing the first page of his bank interview explainer meant checking each
+number against the project, not against the explainer. The notebooks did not
+produce them (section 18). Offered the choice, he said "repair": make the
+notebooks do what they were described as doing, then bring the rest in line.
+
+- **The repository** (`halfadiii/bank_marketing_strategy`, commit `cee1c21`).
+  The cleaning notebook saves its result. The database is built from it: a
+  main table and a previous-outcome table linked by a call id, one view that
+  joins them, and every later notebook reads the view. The modelling notebook
+  splits stratified and reports ROC AUC, four chi-squared tests, what the best
+  model leans on, and the same model without call duration. All six are saved
+  with their results, and there is a README, pinned requirements and a
+  `.gitignore`. What built them is kept, uncommitted, in
+  `.private/bank-repair/`.
+- **The script** reads that clone, reassigns unknown contact methods in the
+  notebook's own order, measures the model without call duration, and checks
+  itself against the notebooks before writing.
+- **The numbers** moved in the third decimal, because the script's contact
+  reassignment had differed from the notebook's on 2,141 rows. ROC AUC:
+  logistic regression 0.9095 to 0.9099, decision tree 0.6930 to 0.7036,
+  gradient boosting 0.9162 to 0.9164. The tests, the cleaning counts and the
+  43,193 rows are unchanged.
+- **The card** no longer says "normalised to 3NF" or that a transitive
+  dependency was removed. It says two tables joined on a call id, gives 0.765
+  beside 0.916, and has a Code link. Its four lines were also cut to two rows
+  each (below).
+- **The dashboard page** states what the model scores without call length,
+  where it only warned about it.
+
+**A layout fault found on the way, and only partly fixed.** On a 1366 by 768
+screen the record that opens when a planet is clicked runs up into the name.
+Measured top of the record against the bottom of the `h1` (244px): subway and
+print 24px above it, bank 68px before this change and 1px after, RAG 140px,
+streaming 342px, which puts its top off the screen. The 10-04 fix measured
+the subway record alone. The bank lines were shortened because they were
+being rewritten anyway; the others are untouched, and the real fix is in the
+layout, not the copy. `.tmp/record-measure.mjs` does the measuring.
+
+Checked: the 46 Playwright tests pass, axe included; `tsc` and ESLint clean
+on the changed files.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -2368,6 +2430,32 @@ lesson as the code comments in the stage panels, the same day, for the third
 time: an audit covers the states it visits. The check written for this pass
 waits for the data and opens every folded section before it runs.
 
+### A replay nobody checked against the thing it replayed (10-05)
+
+`scripts/build-bank-dashboard.py` opened with "This is not a re-analysis. It
+replays the steps the notebooks actually perform." It did not. Written in
+September from reading the notebooks, it did what they were plainly meant to
+do: clean, then model all 43,193 rows. The notebooks themselves never saved
+the cleaned table, built their database from the raw file, split out a lookup
+the data does not support (903 of 2,404 `(pdays, previous)` pairs carry more
+than one outcome), and joined their two tables on row number, which returned
+3,660 rows with 6 correct outcomes. Their models trained on 2,928 calls and
+reported accuracy only. So for a month the site, and then his interview
+explainer, quoted ROC AUC, chi-squared tests and a "third normal form" fix
+that existed in no notebook, under a comment saying they came from them.
+
+Nobody ran the notebooks. They had no saved output, the script's numbers were
+plausible, and the claim that it was a replay was never tested, because a
+replay and a rewrite look the same from the output side. It was found the
+first time each number was traced to the notebook cell that should print it.
+
+The lesson is the check that now sits in the script: if something claims to
+reproduce a source, compare it with the source every time it runs, rows and
+numbers, and fail loudly. "Replays" in a docstring is a claim like any other.
+And a second, smaller one: the script's own contact reassignment differed from
+the notebook's on 2,141 rows while its docstring said "step for step". A
+paraphrase of a step is not the step.
+
 ### The measurement lessons
 
 - **Bounding boxes over-report contrast failures.** They count the empty half of
@@ -2433,6 +2521,11 @@ waits for the data and opens every folded section before it runs.
    redeploy. Until then panel 08 of the streaming dashboard says the trailer
    counts are unavailable. It is a Google Cloud key for YouTube Data API v3;
    keep it restricted to that one API.
+
+7a. **The project records collide with the name on short screens.** At 1366
+   by 768 the RAG record stands 140px into the hero name and the streaming
+   one 342px (Phase 13 has the measurements). Reported to him on 2026-10-05
+   with an offer to fix it in the layout; not yet asked for.
 
 ### Technical, and fine as they are
 

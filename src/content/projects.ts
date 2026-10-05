@@ -31,21 +31,31 @@ export const projects: Project[] = [
   {
     slug: "bank-marketing-strategy",
     title: "Bank marketing strategy",
-    hook: "43,193 telemarketing calls, normalised to 3NF, three classifiers — and a dashboard you can actually drive.",
+    hook: "43,193 telemarketing calls, a two-table database, three classifiers, and a dashboard you can actually drive.",
     // Taken from the repository: six commits, 11–17 January 2025. A single
     // month rather than a range, because that is what the history supports.
+    // A seventh commit, on 2026-10-05, repaired it: until then the notebooks
+    // joined their two tables by row number and modelled 3,660 of the calls,
+    // and the card claimed a third-normal-form fix the data does not support.
+    // Every line below is now something the notebooks print (MASTER_FILE.md,
+    // section 18).
+    //
+    // Each line is short enough to sit on two rows of the record it is shown
+    // in. At three rows apiece that record stood 68px into the name on a
+    // 768px-tall screen; the subway entry above has the measurement.
     period: "Jan 2025",
     stack: ["Python", "scikit-learn", "SQLite", "Dash", "Plotly"],
     detail: [
-      "Cleaned 45,211 contacts down to 43,193: unknown job and education removed, unknown contact method reassigned in proportion to the known split, poutcome folded into a single other category.",
-      "Normalised to third normal form and loaded into SQLite as a main table joined to a previous-outcome table, so the transitive dependency on poutcome was removed rather than tolerated.",
-      "Fitted logistic regression, a decision tree, and gradient boosting on a stratified 80/20 split. Gradient boosting took it at 0.916 ROC AUC — accuracy is the wrong column when 88% of contacts say no.",
+      "Cleaned 45,211 contacts to 43,193: unknown job and education removed, unknown contact method reassigned in the known proportion.",
+      "Loaded into SQLite as a main table joined to a previous-outcome table on a call id, with a row there only for the one contact in five that has a history.",
+      "Three classifiers on a stratified 80/20 split. Gradient boosting took it at 0.916 ROC AUC, or 0.765 without call length, which is only known afterwards.",
       "Chi-squared and t-tests on job, education, housing, and previous outcome, all reported with their statistics rather than a verdict.",
     ],
     live: {
       href: "/dashboard/bank-marketing",
       label: "Open the live dashboard",
     },
+    repo: "https://github.com/halfadiii/bank_marketing_strategy",
   },
   {
     slug: "print-inspection-cv",

@@ -11,13 +11,19 @@ export const metadata: Metadata = {
 };
 
 type Feature = { feature: string; importance: number };
+type Scores = { rocAuc: number };
 
 /**
  * The live half of the bank marketing project.
  *
  * Every figure on this page was produced by `scripts/build-bank-dashboard.py`,
- * which replays the notebooks' own cleaning, normalisation, and models against
- * `bank-full.csv`. Nothing here was typed in by hand.
+ * which replays the notebooks' own cleaning, tests and models against
+ * `bank-full.csv`, and refuses to write anything unless its rows and scores
+ * equal the notebooks'. Nothing here was typed in by hand.
+ *
+ * Since 2026-10-05 it also says what the best model scores without call
+ * length, the column it leans on and cannot have in advance. The notebooks
+ * measure that now, so the page can state it and not only warn about it.
  *
  * The words were rewritten on 2026-10-04, at his request, for somebody who has
  * never trained a model. Each section now says its finding in a sentence, and
@@ -31,6 +37,13 @@ export default function BankMarketingDashboardPage() {
   const best = models.reduce((a, b) => (b.rocAuc > a.rocAuc ? b : a));
   const leans = (best as typeof best & { topFeatures?: Feature[] })
     .topFeatures?.[0];
+  // The same model on the same rows, without the one column it cannot have
+  // before the call. Measured in the notebooks, not estimated.
+  const without = (best as typeof best & { withoutDuration?: Scores })
+    .withoutDuration;
+  const withoutNote = without
+    ? ` Take that one column away and it picks the right one about ${Math.round(without.rocAuc * 100)} times in 100, not ${Math.round(best.rocAuc * 100)}.`
+    : "";
   const saidNo = Math.round((1 - overall.subscriptionRate) * 100);
   const dropped = cleaning.sourceRows - overall.rows;
 
@@ -78,7 +91,7 @@ export default function BankMarketingDashboardPage() {
           so a model that always guesses no is right {saidNo}% of the time,
           which is why plain accuracy is a bad score here.
           {leans?.feature === "duration"
-            ? ` And it leans most on how long the call lasted, about ${Math.round(leans.importance * 100)}% of its decision. You only know that once the call is over, so it's better at explaining who said yes than at choosing who to phone.`
+            ? ` And it leans most on how long the call lasted, about ${Math.round(leans.importance * 100)}% of its decision. You only know that once the call is over, so it's better at explaining who said yes than at choosing who to phone.${withoutNote}`
             : ""}
         </p>
 
@@ -152,6 +165,9 @@ export default function BankMarketingDashboardPage() {
             <p className="label-mono mt-4">
               Trained on 80% of the cleaned rows and scored on the other 20%,
               split so both halves carry the same yes rate.
+              {without
+                ? ` Without call length, ${best.name.toLowerCase()} scores ${without.rocAuc.toFixed(4)} ROC AUC.`
+                : ""}
             </p>
 
             {models

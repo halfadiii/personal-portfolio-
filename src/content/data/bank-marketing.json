@@ -190,74 +190,81 @@
     {
       "name": "Logistic regression",
       "note": "Scaled features, 1000 iterations.",
-      "accuracy": 0.9029,
-      "precision": 0.6476,
-      "recall": 0.3606,
-      "f1": 0.4632,
-      "rocAuc": 0.9095,
+      "accuracy": 0.9027,
+      "precision": 0.6468,
+      "recall": 0.3576,
+      "f1": 0.4606,
+      "rocAuc": 0.9099,
       "testRows": 8639
     },
     {
       "name": "Decision tree",
       "note": "Unpruned, on unscaled features.",
-      "accuracy": 0.8679,
-      "precision": 0.436,
-      "recall": 0.4651,
-      "f1": 0.4501,
-      "rocAuc": 0.693,
+      "accuracy": 0.8713,
+      "precision": 0.4501,
+      "recall": 0.4851,
+      "f1": 0.4669,
+      "rocAuc": 0.7036,
       "testRows": 8639
     },
     {
       "name": "Gradient boosting",
       "note": "Scikit-learn defaults, scaled features.",
-      "accuracy": 0.9051,
-      "precision": 0.6429,
-      "recall": 0.4124,
-      "f1": 0.5024,
-      "rocAuc": 0.9162,
+      "accuracy": 0.9064,
+      "precision": 0.6507,
+      "recall": 0.4193,
+      "f1": 0.51,
+      "rocAuc": 0.9164,
       "testRows": 8639,
       "topFeatures": [
         {
           "feature": "duration",
-          "importance": 0.5046
+          "importance": 0.5035
         },
         {
           "feature": "poutcome_success",
-          "importance": 0.1969
+          "importance": 0.1968
         },
         {
           "feature": "pdays",
-          "importance": 0.0698
+          "importance": 0.0664
         },
         {
           "feature": "housing_yes",
-          "importance": 0.0492
+          "importance": 0.0494
         },
         {
           "feature": "age",
-          "importance": 0.0464
+          "importance": 0.0476
         },
         {
           "feature": "month_mar",
-          "importance": 0.0456
+          "importance": 0.0452
         },
         {
           "feature": "month_oct",
-          "importance": 0.0161
+          "importance": 0.0162
         },
         {
           "feature": "month_sep",
-          "importance": 0.0132
+          "importance": 0.0134
         },
         {
           "feature": "balance",
-          "importance": 0.0096
+          "importance": 0.0099
         },
         {
           "feature": "month_may",
-          "importance": 0.0079
+          "importance": 0.0075
         }
-      ]
+      ],
+      "withoutDuration": {
+        "accuracy": 0.894,
+        "precision": 0.6333,
+        "recall": 0.2082,
+        "f1": 0.3133,
+        "rocAuc": 0.7645
+      }
     }
   ],
   "tests": [
