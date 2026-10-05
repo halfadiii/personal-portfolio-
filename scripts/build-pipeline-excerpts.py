@@ -18,9 +18,10 @@ Output: src/content/data/pipeline-excerpts.json
 
 `--check` writes nothing. It fails if the committed excerpts differ from what
 the repository holds now, or if a code block in the case study's own prose
-(src/content/work/nyc-subway-reliability.mdx, which is pasted by hand) is not a
-run of consecutive lines from the file it is supposed to come from. Run it
-after the repository changes, before believing the page.
+(src/content/work/nyc-subway-reliability.mdx) is not a run of consecutive lines
+from the file it is supposed to come from. The prose carries no code at the
+moment, so that half of the check only matters if some is pasted back in. Run
+it after the repository changes, before believing the page.
 
 Markers rather than line numbers, so an excerpt survives lines being added
 above it. A marker that no longer exists is an error, not an empty block.
@@ -83,11 +84,12 @@ EXCERPTS: dict[str, tuple[str, str, str, str | None]] = {
     ),
 }
 
-# The code blocks in the case study's prose, in the order they appear.
-CASE_STUDY_SOURCES = [
-    "ingest/schema.py",
-    "transform/models/intermediate/int_inferred_arrivals.sql",
-]
+# The code blocks in the case study's prose, in the order they appear. None
+# since 2026-10-04: the prose was rewritten for readers who do not read code,
+# and the stage panels are where the code lives. If a block is ever pasted into
+# the prose again, name the file it came from here and the check will hold it
+# to that file.
+CASE_STUDY_SOURCES: list[str] = []
 
 
 def cut(repo: Path, relative: str, first: str, last: str | None) -> tuple[int, str]:

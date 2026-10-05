@@ -107,6 +107,24 @@ ten seconds, then dig deeper"*.
 Register: first person, contractions, an aside or two, plain words over
 technical ones where both work. Dry rather than jokey.
 
+**The project pages are written for somebody who does not work with data.**
+His instruction, 2026-10-04: the descriptions on the dedicated pages were
+"just too much and very technical", and he wanted them "layman so people can
+actually understand how it works", and shorter. So on every case study,
+dashboard and demo:
+
+- The short version comes first, in two or three sentences.
+- How it works is a handful of numbered steps, each a plain sentence or two.
+- A technical word appears only if it is explained in the same breath ("a
+  database that runs on a laptop"), or in a mono label, or in code.
+- The proof stays, folded. Model scores, test statistics, thresholds and
+  parity figures sit under a one-line `<details>` ("The scores for all three
+  models"). Nothing was deleted to make a page shorter; it was moved one
+  click away.
+- The same thing has one name on a page. The print demo says photos and
+  checks in its prose and in its widget, not frames and gates in one and
+  photos and checks in the other.
+
 ### The non-negotiables
 
 These come from the brief and from him directly, and they have never been
@@ -352,6 +370,23 @@ star's projected position, sitting on a negative z-index outside the hero so
 the star's light continues into the section below rather than stopping at the
 hero's clipping edge.
 
+### How the project pages read (since 10-04)
+
+All eight were rewritten in plain language on 2026-10-04 (section 2 has the
+rule, section 17 the measurements). The three case studies share one shape:
+`The short version`, the problem, `How it works` as numbered steps, what it
+found, and what is not done. The demos and dashboards keep their interactive
+part first, then explain it in the same order. Where a page has a table only a
+specialist would read, the finding is stated in a sentence above it and the
+table is folded:
+
+| Page | What is folded under one line |
+| --- | --- |
+| `/dashboard/bank-marketing` | the three models' scores and what the best one leaned on; the five hypothesis tests; the six cleaning steps |
+| `/demo/print-inspection` | the exact pass marks of the four checks |
+| `/demo/rag` | the four parity figures against the Python, and the half-precision measurement |
+| `/work/nyc-subway-reliability` | the pipeline as a table, and the fitted rain numbers (both already were) |
+
 ### `/work/[slug]` — Case study
 
 MDX, statically generated (`dynamicParams = false`). Sticky table of contents,
@@ -418,10 +453,14 @@ stations, 46 KB of JSON), then one arrival being inferred on the L line —
 
 The realtime feeds are protobuf served without CORS headers, so a browser
 cannot read them; `src/app/api/subway/live/route.ts` is the proxy that makes it
-possible. It fetches, decodes, and returns about 6 KB of JSON where 30 KB of
-protobuf came in. Its `s-maxage=20` cache header is load-bearing: the edge
-answers almost every request, so the MTA is asked about three times a minute
-whether one person is watching or a thousand.
+possible. It fetches, decodes, and returns a few kilobytes of JSON where far
+more protobuf came in, and keeps each answer for ten seconds at most (see
+`/api/subway/live`; it was a twenty-second stale-while-revalidate cache until
+2026-10-03, which is the bug in section 18).
+
+The page's own words were cut from eight explanations to five on 2026-10-04,
+and the panel's labels say "update", "average gap between trains" and "extra
+wait" where they said poll, mean headway and excess wait.
 
 The browser then runs the same three inference rules the warehouse runs, on the
 same raw material.
@@ -445,6 +484,9 @@ pipeline's whole problem in one picture. It replaced a 3D view; see section 18.
 
 The EagleEyes ticket press running: tickets seven across and three deep,
 replaying 2,315 real camera-frame verdicts from the production vision engine.
+On the page a frame is a "photo" and a gate is a "check", in the prose and in
+the widget alike; the five station descriptions in `src/lib/print-inspection.ts`
+were rewritten without the file names and model formats they used to carry.
 
 ### `/demo/rag`
 
@@ -456,10 +498,12 @@ the keyword search each ranked them (and the passage text, behind a
 disclosure), the relevance gate's one-word verdict, every draft with the
 citation check's verdict on it — a failed draft is struck through rather than
 hidden — and the final answer with its `[S1]` tags linked back to the passages
-and to the FDA PDF at that page. Below it: the five steps, the parity figures,
-and five stated limitations (the exam is written but not yet scored; the
-gate is a model's judgement; it can find the right subject in the wrong kind
-of document; 42 scanned clearances excluded; not regulatory advice).
+and to the FDA PDF at that page. Below it: the five steps (Search, Check they
+help, Write, Check the sources, Retry or refuse), one paragraph on the port
+with its parity figures folded, and four stated limitations (not yet graded;
+it can find the right topic in the wrong document; older scanned clearances
+are missing; it only knows wound dressings). The widget's own stage names
+match the page's.
 
 On load it calls `GET /api/rag`, which decodes the index, so a cold start is
 paid before anyone asks. Without `DEEPSEEK_API_KEY` it says answering is
@@ -1323,6 +1367,9 @@ only describe main-thread work.
 - **A region that scrolls sideways can be reached from the keyboard.** The
   pipeline table is wider than a phone because of its file paths, so its
   scroller carries a tab stop, a role and a label, as the dashboard tables do.
+  Three more got the same on 2026-10-04: the live prediction table and the L
+  strip on `/demo/subway`, and the fitted rain numbers on the subway case
+  study. All three had been unreachable since they were built (section 18).
 - **Errors are not red.** An invalid field is marked with a mono `error —`
   prefix and a message that says what broke and what to do.
 - **Under reduced motion nothing animates**, no scene mounts, the preloader
@@ -1962,6 +2009,54 @@ page JS 184.85 to 184.89 kB gzip.
 
 The résumé PDF served at `/resume` still carries the old line. Section 19.
 
+### Phase 12: the project pages, in plain words (10-04)
+
+His words: the description on almost every project's own page was "just too
+much and very technical". He wanted them "layman so people can actually
+understand how it works", and shorter. Section 2 has the rule that came out of
+it; this is what changed.
+
+- **The three case studies** were rewritten from the top. The subway one was
+  1,545 words; it is now a short version, the problem, four numbered steps,
+  why the average gap misleads, what it found, and what is not done. No code in
+  the prose any more: the six steps underneath are where the code is.
+- **The six pipeline steps** are named for a visitor: Collect, Store, Find the
+  arrivals, Measure the wait, Ask about rain, Use it. They were Ingest,
+  Landing, Arrival inference, dbt models, Weather regression, Serving.
+- **The dashboards and demos** got shorter introductions and plain section
+  headings ("Can a model tell who'll say yes?" for "Three models, one held-out
+  split."), with the tables folded as section 6 lists.
+- **Inside the widgets**, the labels a visitor reads were brought into line
+  with the page around them: the subway panel, the print press and its five
+  stations, the RAG trace, and four of the streaming dashboard's captions.
+
+Measured on production builds before and after, everything a visitor is shown
+as each page loads:
+
+| Page | Words shown | Page height |
+| --- | --- | --- |
+| `/work/nyc-subway-reliability` | 1,901 to 884 | 8,143 to 5,330 px |
+| `/work/print-inspection-cv` | 482 to 404 | 2,852 to 2,536 px |
+| `/work/streaming-engagement-analytics` | 1,235 to 519 | 4,345 to 2,772 px |
+| `/demo/subway` | 1,369 to 990 | 6,115 to 5,235 px |
+| `/demo/print-inspection` | 727 to 614 | 4,004 to 3,823 px |
+| `/demo/rag` | 902 to 577 | 4,321 to 3,540 px |
+| `/dashboard/bank-marketing` | 694 to 598 | 5,432 to 4,241 px |
+| `/dashboard/netflix-engagement` | 1,525 to 1,291 | 6,424 to 5,933 px |
+| All eight | 8,835 to 5,877, a third fewer | a fifth shorter |
+
+The two dashboards moved least because most of their words are the charts'
+own labels and captions, which are the dashboard.
+
+One claim got more careful on the way, not less. The bank page now says in
+words what its table always showed: the best model leans on call length for
+half of its decision, and call length is only known once the call is over, so
+it explains who said yes better than it could choose who to phone.
+
+Checked: zero axe violations on all eight pages at desktop and 320px, both as
+they load and with every folded section opened; no sideways overflow; the 46
+Playwright tests and the RAG parity test pass.
+
 ---
 
 ## 18. Mistakes made, and what they taught
@@ -2257,6 +2352,21 @@ since the first build. Every audit passed, because the audit runs with the
 panels closed and there was no comment anywhere else. The first comment in an
 always-visible block failed at once. An audit only covers the states it
 visits: open the dialog, then run it.
+
+### Three scrollers nobody could reach, and why no test said so (10-04)
+
+The prediction table on `/demo/subway`, the L strip beside it, and the fitted
+rain numbers on the subway case study all scroll sideways on a small screen,
+and none could be reached from the keyboard. Each had been that way since it
+was built, under a suite that reports zero violations on every route.
+
+The suite was right about what it looked at. It audits a page the moment it
+loads. The prediction table has no columns until the first live update
+arrives, so at that moment it does not scroll. The rain numbers are inside a
+folded section, so at that moment they are not on the page. This is the same
+lesson as the code comments in the stage panels, the same day, for the third
+time: an audit covers the states it visits. The check written for this pass
+waits for the data and opens every folded section before it runs.
 
 ### The measurement lessons
 

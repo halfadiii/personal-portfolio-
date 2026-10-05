@@ -130,41 +130,41 @@ export const STATIONS: Station[] = [
     id: "unwind",
     x: -9.2,
     title: "Paper roll",
-    role: "Where the web comes off the reel",
+    role: "Where the paper comes off the reel",
     detail:
-      "Blank stock pays off the reel, round two idlers, and onto the deck. The web is seven tickets wide, and everything downstream is timed off this: about three camera frames leave here every second, which is the budget every stage after it has to fit inside.",
+      "Blank paper comes off the roll and onto the press. It is seven tickets wide and it moves fast: about three photos' worth goes by every second, so every step after this has to keep up.",
   },
   {
     id: "press",
     x: -4.6,
     title: "Printer",
-    role: "Lays down the tickets, and the Q-blocks",
+    role: "Prints the tickets, and the small marks on them",
     detail:
-      "Tickets are printed across the web rather than one at a time — seven abreast, rotated a quarter turn, rolling off continuously. Each one carries a single small registration mark, a Q-block. They are not decoration: they are the thing the inspection reads.",
+      "Tickets are printed seven across, rolling off without a break. Each one carries a single small printed mark, called a Q-block. Those marks are not decoration: they are what the inspection reads.",
   },
   {
     id: "camera",
     x: -0.4,
     title: "Overhead camera",
-    role: "One frame, twenty-one tickets",
+    role: "One photo, twenty-one tickets",
     detail:
-      "A strobe on the gantry freezes the web and the camera takes in a whole bunch at once: seven across by three down, twenty-one tickets and twenty-one Q-blocks in a single bitmap. It writes that into a watched folder named with the timestamp, the serial and the camera, and `runner_folder_watcher.py` polls the folder twice a second and hands anything new to the engine.",
+      "A flash freezes the moving paper and the camera photographs a whole bunch at once: seven across by three down, twenty-one tickets and twenty-one blocks in one picture. Each new photo is handed straight to the checking program.",
   },
   {
     id: "engine",
     x: 4.2,
     title: "The workstation",
-    role: "Detector, then four gates, then the screen",
+    role: "Finds the blocks, runs four checks, shows the result",
     detail:
-      "A YOLO model exported to ONNX finds the blocks at 1280px, then near-identical overlapping boxes are merged so the count is stable. Four gates follow — count, visibility, density, position — and the frame is only OK if every one of them passes. Detection is the expensive half at 79 ms; the gates cost 4 ms. `fx_router.py` puts the answer on the operator screen as GOOD or NO GOOD, writes a row to the results CSV, and maps it to a green/red lamp — the seam where a PLC signal would attach.",
+      "A trained model finds every block in the photo. Then four checks run: are they all there, is each one sharp, does it have enough ink, is it in the right place. The photo only passes if all four do. The operator sees GOOD or NO GOOD on a screen, with a green or red light.",
   },
   {
     id: "web",
     x: 8.4,
-    title: "Printed ticket web",
+    title: "Printed tickets",
     role: "What the camera was looking at",
     detail:
-      "The finished web lifts over the turn rollers and away. This is where the failure modes are visible to a person: a frame the gates turned down is one where a block came out too faint to be sure of, too thin on ink, out of position relative to its neighbours — or simply is not there, and the count comes back at 20 instead of 21.",
+      "The finished tickets roll away. This is where a person could see what went wrong: a block that came out too faint, too thin on ink, out of place, or missing altogether, so the count comes back as 20 and not 21.",
   },
 ];
 

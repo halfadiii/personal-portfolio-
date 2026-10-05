@@ -7,7 +7,7 @@ import { formatHalf, formatWeek, netflix } from "@/lib/netflix-data";
 export const metadata: Metadata = {
   title: "Streaming engagement dashboard",
   description:
-    "Netflix's own engagement data, three half-years of hours for every title and five years of weekly Top 10 charts in 94 countries, as a dashboard: what drives hours, which content earns them, and how long a hit holds a market.",
+    "Netflix's own viewing numbers as a dashboard: what is driving the hours, what kind of title earns them, and how long a hit lasts in each country.",
 };
 
 /**
@@ -15,6 +15,10 @@ export const metadata: Metadata = {
  *
  * Every figure here comes from `scripts/build-netflix-dashboard.py`, which
  * reproduces the repository's SQL KPI layer over its committed star schema.
+ *
+ * The words were rewritten on 2026-10-04, at his request, for somebody who
+ * does not work with data: where the numbers come from in four sentences, and
+ * the limits cut to the four a visitor would actually trip over.
  */
 export default function NetflixEngagementPage() {
   const { source, periods } = netflix;
@@ -34,13 +38,12 @@ export default function NetflixEngagementPage() {
           More titles, fewer hours each.
         </h1>
         <p className="measure text-lead text-steel">
-          Netflix&rsquo;s viewing keeps growing: {first.hoursB.toFixed(2)} billion
-          hours in {formatHalf(first.label)}, {last.hoursB.toFixed(2)} billion in{" "}
-          {formatHalf(last.label)}. But the catalogue is growing faster, so the
-          average title earns less than it did. This is the dashboard the project
-          was built for, over the same model, answering the questions a streaming
-          engagement team would actually ask: what drives the hours, which kind of
-          content earns them, and how long a hit holds a market.
+          People watch more Netflix every half-year:{" "}
+          {first.hoursB.toFixed(2)} billion hours in {formatHalf(first.label)},{" "}
+          {last.hoursB.toFixed(2)} billion in {formatHalf(last.label)}. But
+          Netflix adds titles even faster, so the average title gets watched
+          less than it used to. These charts use Netflix&rsquo;s own published
+          numbers to show what&rsquo;s behind that.
         </p>
         <p className="label-mono">
           Netflix What We Watched reports + weekly Top 10 · Python · SQL · SQLite
@@ -56,25 +59,21 @@ export default function NetflixEngagementPage() {
           <span className="text-signal">02</span> / where the numbers come from
         </p>
         <h2 id="data-title" className="font-display text-section mt-5">
-          Two public sources that don&rsquo;t share a grain.
+          Two reports from Netflix, put together.
         </h2>
         <div className="measure mt-5 flex flex-col gap-5">
           <p className="text-lead text-steel">
-            Netflix&rsquo;s half-yearly <em>What We Watched</em> report lists every
-            title with the hours it earned, about 99% of all viewing on the
-            platform, twice a year and with no geography. Its weekly Top 10 has the
-            weeks and the countries, back to {formatWeek(source.firstWeek)}, but
-            only ten titles per category and, for countries, only a rank.
+            Twice a year, Netflix lists every title and the hours it was
+            watched. Every week since {formatWeek(source.firstWeek)}, it also
+            publishes a Top 10 for the world and for {source.countries}{" "}
+            countries. The first has the hours but no countries. The second
+            has the countries but, for those, only a ranking.
           </p>
           <p className="text-body text-steel">
-            So the project models them as two fact tables at their own grains,{" "}
-            {source.halfRows.toLocaleString()} title-by-half rows and{" "}
-            {source.weeklyRows.toLocaleString()} title-by-week-by-market rows,
-            sharing date, title and region dimensions. The half-yearly totals
-            reproduce the figures Netflix published for the same reports before
-            anything was analysed. This page is built from that model by a script
-            that reruns the project&rsquo;s SQL, so a new data drop changes the
-            numbers here rather than leaving a stale sentence behind.
+            I put the two together, and before trusting anything else I
+            checked that my totals matched the ones Netflix published. When
+            Netflix releases new numbers, a script rebuilds this page from
+            them.
           </p>
         </div>
       </section>
@@ -88,34 +87,23 @@ export default function NetflixEngagementPage() {
         </h2>
         <ul className="measure mt-8 flex list-none flex-col gap-5 p-0">
           <Limit title="There are no hours by country.">
-            Netflix publishes rank by country and nothing else, so every regional
-            panel here is a stated proxy: how long titles stay in a chart, and how
-            often a market&rsquo;s number one is the world&rsquo;s. Neither is an
-            hour, and neither is presented as one.
+            Netflix only publishes rankings for each country. So the country
+            charts use stand-ins: how long a title stays in a country&rsquo;s
+            Top 10, and how often a country&rsquo;s number one matches the
+            world&rsquo;s. Neither is hours, and neither is shown as hours.
           </Limit>
           <Limit title="Weekly hours only exist for hits.">
-            The weekly lines are the global Top 10&rsquo;s hours. They show the
-            shape of what charted, not of everything people watched that week.
+            The weekly lines cover the global Top 10, not everything people
+            watched that week.
           </Limit>
-          <Limit title="Netflix's rollups are not titles.">
-            From the second half of 2025 the report folds its long tail into
-            &ldquo;Other Shows&rdquo; and &ldquo;Other Movies&rdquo;. In{" "}
-            {formatHalf(last.label)} &ldquo;Other Shows&rdquo; is the second-largest
-            row in the file. They count towards the totals, which is how Netflix
-            reports them, and are left out of every per-title view.
-          </Limit>
-          <Limit title="Trailer views run to today, and prove nothing on their own.">
-            YouTube only reports a trailer&rsquo;s total so far, not what it had
-            at release, and a show that becomes a hit sends people back to its
-            trailer. Twenty titles is enough to see whether the two move
-            together, not to measure how much. The counts are fetched live and
-            never stored, because YouTube&rsquo;s terms cap keeping them at 30
-            days.
+          <Limit title="Trailer views are as of today.">
+            YouTube shows a trailer&rsquo;s total so far, and a show that
+            becomes a hit sends people back to its trailer. So that chart can
+            show whether the two tend to move together, and nothing more.
           </Limit>
           <Limit title="There are no genres.">
-            Content type means series or film, English or not. Netflix
-            doesn&rsquo;t publish genre, so answering which genres over-index means
-            matching titles against a second source.
+            Netflix doesn&rsquo;t publish them. This can tell a series from a
+            film, and English from non-English, but not a comedy from a drama.
           </Limit>
         </ul>
       </section>

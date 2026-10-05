@@ -109,10 +109,9 @@ export function PrintInspectionDemo() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <p className="label-mono max-w-[42rem]">
-          Streaming the recorded run at a seventh of line speed. Tickets come
-          off this press seven across and three deep, so one camera frame is
-          twenty-one of them — and every verdict, block count, and failed check
-          below is the production engine&rsquo;s own output for that frame.
+          This replays a real run, slowed to a seventh of full speed. Each
+          photo holds twenty-one tickets, and every pass or fail below is what
+          the real system decided for that photo.
         </p>
         <button
           type="button"
@@ -198,7 +197,7 @@ export function PrintInspectionDemo() {
           <div>
             <p className="label-mono mb-2">This run</p>
             <dl className="grid grid-cols-3 gap-2">
-              <Stat label="frames" value={tally.seen} />
+              <Stat label="photos" value={tally.seen} />
               <Stat label="passed" value={tally.passed} tone="pass" />
               <Stat label="rejected" value={tally.rejected} tone="fail" />
             </dl>
@@ -206,7 +205,7 @@ export function PrintInspectionDemo() {
 
           <div>
             <p className="label-mono mb-2">
-              The four gates{latest ? ` · frame ${latest.serial}` : ""}
+              The four checks{latest ? ` · photo ${latest.serial}` : ""}
             </p>
             <ul className="flex list-none flex-col p-0">
               {measured.gates.map((gate, i) => {
@@ -302,10 +301,15 @@ export function PrintInspectionDemo() {
         </aside>
       </div>
 
+      {/* The data file carries a longer note and the model's file path. Both
+          are for whoever maintains this, so the page says the part a visitor
+          needs: it is real, and what was and was not changed. */}
       <p className="label-mono">
-        {source.system} for {source.client}, {source.line}. {source.note} Model:{" "}
-        {/* A weights path has no spaces in it and is wider than a phone. */}
-        <span className="text-signal break-all">{source.model}</span>.
+        {source.system}, built for {source.client} on the {source.line}. Every
+        result here is the real system&rsquo;s own, from a run of{" "}
+        {measured.frames.toLocaleString()} labelled photos. They are shown in a
+        shuffled order, because the good and bad sets were photographed on
+        different days. Nothing else was changed.
       </p>
     </div>
   );

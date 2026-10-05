@@ -33,20 +33,17 @@ export function Regression() {
           title="Does rain cost a rider time? Not measurably."
         >
           <p className="measure text-lead text-steel">
-            Excess wait is the time a rider spends on a platform beyond what the
-            timetable promises. Regressed on how much of each month was wet, per
-            line, controlling for season and for the 2020&ndash;21 collapse. On
-            five lines and eleven years of the MTA&rsquo;s own measurements,
-            every interval contains zero.
+            I took eleven years of the MTA&rsquo;s own monthly figures for five
+            lines and checked whether wetter months had longer waits, after
+            allowing for the time of year and the pandemic. They didn&rsquo;t.
+            Every result includes zero, which is the careful way of saying: no
+            effect I can measure.
           </p>
           <p className="measure text-body text-steel mt-4">
-            That is the honest result, and it is reported rather than buried: a
-            coefficient without a confidence interval is a claim, not a
-            measurement, and an interval that spans zero is an answer. It is
-            also the argument for the pipeline. A monthly average over every
-            trip on a line is the wrong instrument for a question about the
-            twenty minutes it was raining — which is exactly the resolution the
-            ingest above is built to reach.
+            That&rsquo;s a real answer, so it&rsquo;s shown here and not buried.
+            It&rsquo;s also the reason for the pipeline above. A monthly average
+            is a blunt tool for a question about the twenty minutes it was
+            raining.
           </p>
         </SectionHeading>
 

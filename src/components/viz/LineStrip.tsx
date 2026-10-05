@@ -297,7 +297,15 @@ export function LineStrip({
         <span data-readout />
       </p>
 
-      <div className="overflow-x-auto">
+      {/* The diagram keeps a minimum width so its stations stay legible, which
+          makes this scroll on a phone. A region that scrolls has to be
+          reachable from the keyboard. */}
+      <div
+        className="overflow-x-auto"
+        tabIndex={0}
+        role="region"
+        aria-label="Diagram of the L line, scrollable"
+      >
         <svg
           viewBox={`0 0 ${W} ${H}`}
           className="strip block h-auto w-full min-w-[760px]"

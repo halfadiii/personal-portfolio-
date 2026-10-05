@@ -9,7 +9,7 @@ import { POLL_SECONDS } from "@/lib/subway-live";
 export const metadata: Metadata = {
   title: "Subway arrival demo",
   description:
-    "Trains running a simulated line, the feed they would publish, and the inference that turns a vanished prediction into an arrival — with the error it makes, measured against ground truth.",
+    "Live New York subway trains on a map, and one line where you can watch an arrival being worked out from the MTA's own feed.",
 };
 
 /**
@@ -18,6 +18,11 @@ export const metadata: Metadata = {
  * The project's own `ingest/watch.py` exists to watch one thing happen: a stop
  * dropping off a train's prediction list. That is hard to show in prose and
  * impossible to show in a diagram, so this runs it.
+ *
+ * The words are for somebody who has never heard of a data feed. They were
+ * rewritten on 2026-10-04 at his request, shorter and without the vocabulary
+ * (protobuf, CORS, route handlers): eight explanations became five, and each
+ * one says what you are looking at before it says anything else.
  */
 export default function SubwayDemoPage() {
   return (
@@ -26,21 +31,17 @@ export default function SubwayDemoPage() {
         <SectionLabel
           index="—"
           label="live demo"
-          meta="496 stations / 26 routes / real GTFS geometry"
+          meta="496 stations / 26 routes / live trains"
         />
         <h1 className="font-display text-hero leading-[0.88]">
           The whole system, and the one event it never reports.
         </h1>
         <p className="measure text-lead text-steel">
-          There is no arrival event in the MTA feed. A train that reaches a
-          platform simply stops being predicted for it, and the next snapshot is
-          quietly shorter than the last. Everything this pipeline produces rests
-          on reading that absence correctly — so here it is, running.
+          The MTA&rsquo;s live data never says when a train arrives. A train
+          that reaches a platform just stops being listed for it. This page
+          shows that happening, on real trains, right now.
         </p>
-        <p className="label-mono">
-          Live · the same inference as{" "}
-          <code className="text-signal">int_inferred_arrivals.sql</code>
-        </p>
+        <p className="label-mono">Live, from the MTA&rsquo;s own feeds</p>
       </header>
 
       <div className="mt-14">
@@ -49,19 +50,16 @@ export default function SubwayDemoPage() {
 
       <section aria-labelledby="arrival-title" className="section-gap">
         <p className="label-mono">
-          <span className="text-signal">02</span> / the part the pipeline cares
-          about
+          <span className="text-signal">02</span> / one line, up close
         </p>
         <h2 id="arrival-title" className="font-display text-section mt-5">
           Now watch one arrival happen.
         </h2>
         <p className="measure text-lead text-steel mt-5">
-          The map above is the system. This is the mechanism underneath it, on
-          the L, running right now: the MTA&rsquo;s own feed polled every{" "}
-          {POLL_SECONDS} seconds, the numbers converging, and a stop dropping
-          off the list at the moment a train reaches it. Nothing here is
-          simulated, and nothing is pre-recorded — the arrivals below were
-          inferred while you had this page open.
+          This is the L train, right now. The table shows when the MTA expects
+          each train at its next stops, refreshed every {POLL_SECONDS} seconds.
+          When a train reaches a platform, that stop drops off its list.
+          That&rsquo;s the arrival. Nothing here is recorded or simulated.
         </p>
 
         <div className="mt-10">
@@ -77,36 +75,24 @@ export default function SubwayDemoPage() {
         <ol className="mt-10 flex list-none flex-col p-0">
           {[
             {
-              title: "These are real trains, on the real L, right now",
-              body: "The MTA publishes eight GTFS-realtime feeds; this reads the one carrying the L. It is protobuf, and it is served without CORS headers, so a browser cannot fetch it — the decoding happens in a route handler on this site's own server, which is what every live transit map on the web has behind it.",
+              title: "These are real trains",
+              body: `The page reads the MTA's live data and refreshes every ${POLL_SECONDS} seconds: every line on the map, and the L in the table.`,
             },
             {
-              title: "A train between platforms is drawn where the feed thinks it is",
-              body: "The feed publishes which stop a train is at or heading for, and when it expects to arrive. It never publishes a position. So the mark between two platforms is that prediction run backwards — the feed's belief made spatial, not a measurement. If the belief is wrong the mark is wrong in exactly the same way, which is the honest picture and also the interesting one: it is the same belief the arrival is about to be inferred from.",
+              title: "A train between stations is a best guess",
+              body: "The MTA says which stop a train is heading for and when it expects to get there. It never says where the train is. So each train is placed from that prediction.",
             },
             {
-              title: "The trains move continuously; the feed does not",
-              body: "On the strip diagram, trains slide along the rail every frame because they are physical objects. The stems above the followed train — one per stop it is predicting, each with its countdown — hold still and then jump all at once, because a belief is not continuous. It is a snapshot that is right when it is taken and goes stale until the next one lands. Those two rates running side by side are this pipeline's entire problem.",
+              title: "An arrival is a stop disappearing",
+              body: "When a train passes a platform, that stop leaves its list, and the last time it was predicted is taken as the arrival. If it disappears while still more than two minutes away, it was cancelled, so it doesn't count.",
             },
             {
-              title: `The feed is generated every ${POLL_SECONDS} seconds`,
-              body: "For each train it publishes predicted arrivals for its next six stops, with error that grows the further ahead the guess is. That is why the numbers in the table visibly converge as a train closes on a platform.",
+              title: "Then it becomes waiting time",
+              body: "Arrivals give the gaps between trains, and the gaps give how long a rider waits. Bunched trains make the wait worse even when the average gap looks fine.",
             },
             {
-              title: "An arrival is a column going empty",
-              body: "When a train passes a platform, that stop leaves its prediction list. The pipeline takes the last value the prediction carried and calls it the arrival. Nothing else in the feed marks the event.",
-            },
-            {
-              title: "A vanish that was never due is thrown away",
-              body: "A prediction that disappears while still more than two minutes in the future is a cancellation or a re-route, not an arrival. Those are counted separately and dropped — treating them as arrivals would flatter the service exactly when riders are suffering most.",
-            },
-            {
-              title: "Then it becomes headway, and excess wait",
-              body: "Consecutive inferred arrivals at one platform give headways; headways give excess wait, the time a rider spends beyond what an evenly spread service of the same frequency would ask. Bunching pushes it up while leaving the mean headway untouched, which is exactly why the mean headway is the wrong metric.",
-            },
-            {
-              title: "There is no error column, and there cannot be",
-              body: "Nothing here can be graded, because nobody publishes when the train actually arrived — that absence is the entire premise of the project. The method is checked instead in the pipeline's own test suite, against synthetic feeds whose answer is known by construction: a train that arrives, one cancelled ten minutes out, one still in the newest snapshot. That runs on every commit, which is a better place for a correctness check than a page.",
+              title: "Nobody can mark it right or wrong",
+              body: "Nobody publishes when a train really arrived, so there's no answer sheet to check this page against. The method is tested separately, on made-up data where the answer is known.",
             },
           ].map((step, i) => (
             <li
@@ -130,9 +116,8 @@ export default function SubwayDemoPage() {
           The eight feeds this reads from.
         </h2>
         <p className="measure text-lead text-steel mt-5">
-          Straight out of <code className="text-signal">ingest/feeds.py</code>.
-          There are eight because that is how the MTA groups the lines — no key
-          required for the subway feeds, refreshed roughly every thirty seconds.
+          The MTA splits the subway into eight live feeds, grouped by line.
+          They&rsquo;re open to anyone, with no password.
         </p>
 
         <ul className="mt-10 grid list-none gap-px p-0 sm:grid-cols-2 lg:grid-cols-4">
@@ -159,7 +144,7 @@ export default function SubwayDemoPage() {
           href="/work/nyc-subway-reliability#pipeline"
           className="tap label-mono hover:text-signal inline-flex"
         >
-          See the pipeline diagram
+          See the six steps
         </Link>
         <Link href="/#work" className="tap label-mono hover:text-signal inline-flex">
           Back to selected work

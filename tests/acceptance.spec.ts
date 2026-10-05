@@ -126,7 +126,9 @@ test("a pipeline stage opens its panel with the code that runs it", async ({
   // not to the home page.
   await page.goto("/work/nyc-subway-reliability");
 
-  await page.getByRole("button", { name: /03 \/ arrival inference/i }).click();
+  // The stage is named for a visitor ("find the arrivals"); the file it shows
+  // keeps the project's own name.
+  await page.getByRole("button", { name: /03 \/ find the arrivals/i }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("int_inferred_arrivals.sql");

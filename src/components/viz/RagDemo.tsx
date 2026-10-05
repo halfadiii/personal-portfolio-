@@ -85,18 +85,18 @@ export function RagDemo() {
       if (!current) return current;
       switch (event.type) {
         case "retrieval":
-          setAnnouncement(`Retrieved ${event.sources.length} passages.`);
+          setAnnouncement(`Found ${event.sources.length} passages.`);
           return { ...current, retrieval: event };
         case "gate":
           setAnnouncement(
             event.relevant
-              ? "Relevance check passed."
-              : "Relevance check failed. Refusing.",
+              ? "The passages look useful. Writing an answer."
+              : "The passages do not answer it. Refusing.",
           );
           return { ...current, gate: event };
         case "draft":
           setAnnouncement(
-            `Draft ${event.attempt} ${event.valid ? "passed" : "failed"} the citation check.`,
+            `Attempt ${event.attempt} ${event.valid ? "passed" : "failed"} the source check.`,
           );
           return { ...current, drafts: [...current.drafts, event] };
         case "final":
@@ -105,7 +105,7 @@ export function RagDemo() {
               ? "Answered."
               : event.outcome === "refused"
                 ? "Refused."
-                : "Retrieval finished. Answering is not configured.",
+                : "Search finished. Answering is switched off.",
           );
           return { ...current, final: event, running: false };
         case "error":
@@ -233,12 +233,12 @@ export function RagDemo() {
 
         <p className="label-mono">
           {statusError
-            ? "The document index could not be reached."
+            ? "The documents could not be loaded."
             : status
-              ? `Index loaded: ${status.documents} documents, ${status.chunks.toLocaleString()} chunks.${
-                  status.answering ? "" : " Answering is switched off on this server, so questions stop after retrieval."
+              ? `Loaded: ${status.documents} documents, ${status.chunks.toLocaleString()} passages.${
+                  status.answering ? "" : " Answering is switched off on this server, so it will only show the passages it finds."
                 }`
-              : "Loading the document index…"}
+              : "Loading the documents…"}
         </p>
       </form>
 
@@ -257,19 +257,19 @@ function Trace({ run }: { run: Run }) {
       </p>
 
       <ol className="flex list-none flex-col gap-8 p-0">
-        <Stage n="01" title="Retrieve" state={retrieval ? "done" : run.running ? "running" : "idle"}>
+        <Stage n="01" title="Search" state={retrieval ? "done" : run.running ? "running" : "idle"}>
           {retrieval ? <Sources retrieval={retrieval} /> : null}
         </Stage>
 
         {retrieval && final?.outcome !== "unavailable" && (gate || run.running) ? (
-          <Stage n="02" title="Relevance gate" state={gate ? (gate.relevant ? "done" : "failed") : "running"}>
+          <Stage n="02" title="Check they help" state={gate ? (gate.relevant ? "done" : "failed") : "running"}>
             {gate ? (
               <p className="text-body text-steel">
                 The model was asked whether these passages help answer the question. It said{" "}
                 <span className={cn("label-mono", gate.relevant ? PASS : FAIL)}>
                   {gate.verdict || "(nothing)"}
                 </span>
-                {gate.relevant ? ", so drafting went ahead." : ", so it refused without drafting."}{" "}
+                {gate.relevant ? ", so it went on to write an answer." : ", so it refused without writing one."}{" "}
                 <span className="label-mono">{seconds(gate.ms)}</span>
               </p>
             ) : null}
@@ -279,7 +279,7 @@ function Trace({ run }: { run: Run }) {
         {gate?.relevant ? (
           <Stage
             n="03"
-            title="Draft and citation check"
+            title="Write, then check the sources"
             state={
               drafts.some((d) => d.valid) ? "done" : final ? "failed" : "running"
             }
@@ -289,7 +289,7 @@ function Trace({ run }: { run: Run }) {
                 <DraftView key={draft.attempt} draft={draft} />
               ))}
               {run.running && !final ? (
-                <p className="label-mono">Drafting attempt {drafts.length + 1}…</p>
+                <p className="label-mono">Writing attempt {drafts.length + 1}…</p>
               ) : null}
             </div>
           </Stage>
@@ -337,8 +337,8 @@ function Sources({ retrieval }: { retrieval: Retrieval }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-body text-steel">
-        {retrieval.denseCandidates} candidates by meaning, {retrieval.keywordCandidates} by keyword, fused by
-        rank into these five.{" "}
+        {retrieval.denseCandidates} passages found by meaning and {retrieval.keywordCandidates} by exact
+        words, narrowed to the best five.{" "}
         <span className="label-mono">
           embedding {Math.round(retrieval.embedMs)} ms · search {Math.round(retrieval.searchMs)} ms
         </span>
@@ -422,7 +422,7 @@ function DraftView({ draft }: { draft: Draft }) {
   return (
     <div className="border-hairline flex flex-col gap-3 border p-4">
       <p className="label-mono flex flex-wrap justify-between gap-3">
-        <span>Draft {draft.attempt}</span>
+        <span>Attempt {draft.attempt}</span>
         <span>{seconds(draft.ms)}</span>
       </p>
       <p className={cn("text-small text-steel whitespace-pre-line", !draft.valid && "line-through")}>
@@ -431,9 +431,9 @@ function DraftView({ draft }: { draft: Draft }) {
       <p className={cn("label-mono", draft.valid ? PASS : FAIL)}>
         {draft.valid
           ? draft.cited.length
-            ? `Citation check passed: every tag cited (${[...new Set(draft.cited)].map((n) => `S${n}`).join(", ")}) is a passage it was given.`
-            : "Citation check passed: the model said the passages do not contain the answer."
-          : `Citation check failed: ${draft.reason}. This draft was thrown away.`}
+            ? `Source check passed: every source it points at (${[...new Set(draft.cited)].map((n) => `S${n}`).join(", ")}) is a passage it was given.`
+            : "Source check passed: it said the passages do not contain the answer."
+          : `Source check failed: ${draft.reason}. This attempt was thrown away.`}
       </p>
     </div>
   );
@@ -452,7 +452,7 @@ function Verdict({ final, sources }: { final: Final; sources: Source[] }) {
     >
       <p className="label-mono">
         <span className={final.outcome === "answered" ? PASS : final.outcome === "refused" ? FAIL : undefined}>
-          {final.outcome === "answered" ? "Answered" : final.outcome === "refused" ? "Refused" : "Stopped after retrieval"}
+          {final.outcome === "answered" ? "Answered" : final.outcome === "refused" ? "Refused" : "Stopped after the search"}
         </span>
         {final.reason ? ` · ${final.reason}` : null}
       </p>

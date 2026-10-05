@@ -200,7 +200,7 @@ function Trailers() {
     <Panel
       index="08"
       title="Trailer views against hours watched"
-      caption={`${trailers.length} titles from ${formatHalf("2026H1")}, ${trailers.filter((t) => t.type === "Show").length} series and ${trailers.filter((t) => t.type === "Movie").length} films, released and first charting in the same half-year so their trailers have had a similar time to gather views, and spread from the biggest hit to titles that spent one week at the bottom of the Top 10. Each trailer was matched by hand to the official Netflix channel for the title's home market. Films and series are kept apart, because film trailers draw far more views at similar viewing levels. Both axes are logarithmic.`}
+      caption={`${trailers.length} titles from ${formatHalf("2026H1")}, ${trailers.filter((t) => t.type === "Show").length} series and ${trailers.filter((t) => t.type === "Movie").length} films, from the biggest hit down to ones that spent a single week at the bottom of the Top 10. Films and series are kept apart, because film trailers get far more views. Both scales are stretched so small and large titles fit on one chart.`}
     >
       {data === null ? (
         <p className="label-mono">Fetching current view counts from YouTube…</p>
@@ -324,7 +324,7 @@ function Growth() {
     <Panel
       index="01"
       title="More titles, less each"
-      caption={`Indexed to ${formatHalf(base.label)} = 100. By ${last.label} the catalogue is ${(last.titles - 100).toFixed(1)}% larger and total hours ${(last.hours - 100).toFixed(1)}% higher, so hours per title fell ${(100 - last.perTitle).toFixed(1)}%. The growth is breadth, not bigger hits.`}
+      caption={`Everything starts at 100 in ${formatHalf(base.label)}. By ${last.label} there are ${(last.titles - 100).toFixed(1)}% more titles and ${(last.hours - 100).toFixed(1)}% more hours watched, so the average title earned ${(100 - last.perTitle).toFixed(1)}% less. More titles, not bigger hits.`}
     >
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
@@ -358,7 +358,7 @@ function Concentration({ periodIndex }: { periodIndex: number }) {
     <Panel
       index="02"
       title="How much a few titles carry"
-      caption={`Share of ${formatHalf(period.label)}'s hours earned by the most-watched titles, rank on a log scale. Half of all hours came from ${half.toLocaleString()} titles, ${pct((100 * half) / concentration.titles)} of the catalogue.${period.bucketPct ? ` Netflix's "Other" rollups (${pct(period.bucketPct, 2)} of hours) are not titles and are left out.` : ""}`}
+      caption={`How much of ${formatHalf(period.label)}'s viewing went to the biggest titles. Half of all hours came from just ${half.toLocaleString()} titles, ${pct((100 * half) / concentration.titles)} of the catalogue.${period.bucketPct ? ` Netflix's "Other" totals (${pct(period.bucketPct, 2)} of hours) aren't titles, so they're left out.` : ""}`}
     >
       <ResponsiveContainer width="100%" height={260}>
         <AreaChart
@@ -450,7 +450,7 @@ function ContentType({ periodIndex }: { periodIndex: number }) {
     <Panel
       index="03"
       title="Series earn more per title"
-      caption={`${formatHalf(period.label)}: series are ${pct(Show.pctTitles)} of titles and ${pct(Show.pctHours)} of hours. A series averages ${Show.avgM.toFixed(2)}M hours against a film's ${Movie.avgM.toFixed(2)}M, ${ratio.toFixed(1)} times as much. Films went from ${netflix.periods[0].byType.Movie.titles.toLocaleString()} titles to ${netflix.periods[netflix.periods.length - 1].byType.Movie.titles.toLocaleString()} across the three halves while their hours went from ${netflix.periods[0].byType.Movie.hoursB}B to ${netflix.periods[netflix.periods.length - 1].byType.Movie.hoursB}B.`}
+      caption={`In ${formatHalf(period.label)}, series were ${pct(Show.pctTitles)} of the titles but ${pct(Show.pctHours)} of the hours. A series averages ${Show.avgM.toFixed(2)} million hours and a film ${Movie.avgM.toFixed(2)} million, ${ratio.toFixed(1)} times as much. Films grew from ${netflix.periods[0].byType.Movie.titles.toLocaleString()} titles to ${netflix.periods[netflix.periods.length - 1].byType.Movie.titles.toLocaleString()}, and their hours still fell, from ${netflix.periods[0].byType.Movie.hoursB} to ${netflix.periods[netflix.periods.length - 1].byType.Movie.hoursB} billion.`}
     >
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 44, bottom: 4, left: 4 }}>
@@ -606,7 +606,7 @@ function Markets() {
     <Panel
       index="06"
       title="How long a hit holds a market"
-      caption={`Netflix publishes no hours by country, only rank, so both axes are stated proxies. Up: how many weeks a title stays in that country's Top 10 on average. Right: how often, over the last 52 weeks, its number one ${noun} was the global English-language number one. ${countries.length} markets.`}
+      caption={`Netflix doesn't publish hours by country, only rankings, so these are stand-ins. Higher up: titles stay in that country's Top 10 for more weeks. Further right: over the last 52 weeks, its number one ${noun} was more often the world's number one in English. ${countries.length} countries.`}
     >
       <div className="flex flex-wrap items-end gap-4">
         <fieldset className="m-0 border-0 p-0">
@@ -699,7 +699,7 @@ function Markets() {
 
 function Premiere() {
   const { premiere } = netflix;
-  const { season1, season2, markets } = premiere;
+  const { season1, markets } = premiere;
   const count = (status: MarketStatus) => markets.filter((m) => m.status === status).length;
   const climbs = markets.filter((m) => m.status === "climbed").map((m) => (m.was ?? 0) - (m.now ?? 0));
   const [focus, setFocus] = useState<Market | null>(null);
@@ -709,7 +709,7 @@ function Premiere() {
     <Panel
       index="07"
       title="A premiere wakes up the season before it"
-      caption={`${premiere.title}: Season 1 had been off the global chart since ${formatWeek(season1.lastOnGlobalChart)}, and in 2025 and 2026 it charted in at most ${season1.maxMarketsBeforePremiere2025On} market${season1.maxMarketsBeforePremiere2025On === 1 ? "" : "s"} in any week. Season 2 arrived the week of ${formatWeek(premiere.season2FirstWeek)} at number ${season2.firstWeek.rank} globally with ${season2.firstWeek.hoursM}M hours, then went to number ${season2.latestWeek.rank} with ${season2.latestWeek.hoursM}M hours in ${season2.latestWeek.markets} markets. Season 1 came back with it: ${season1.marketsFirstWeek} markets in the premiere week, ${season1.marketsLatestWeek} of ${markets.length} a week later${season1.globalRankLatestWeek ? `, and number ${season1.globalRankLatestWeek} on the global chart` : ""}.`}
+      caption={`When ${premiere.title} came back for Season 2, the week of ${formatWeek(premiere.season2FirstWeek)}, Season 1 came back with it. It had been off the global chart since ${formatWeek(season1.lastOnGlobalChart)}. It returned to the Top 10 in ${season1.marketsFirstWeek} countries that week, and ${season1.marketsLatestWeek} of ${markets.length} the week after.`}
     >
       <ul className="flex list-none flex-wrap gap-x-5 gap-y-2 p-0">
         {order

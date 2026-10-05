@@ -1,75 +1,57 @@
 ---
 title: AI print inspection system
-hook: Defect detection on high-speed print lines, 69% → 95% mAP.
+hook: A camera that checks print as it comes off the press, so defects are caught on the line.
 period: Aug 2025 – Dec 2025
 stack:
   - OpenCV
   - YOLOv8
   - Python
 summary: >-
-  A vision model that finds print defects on a moving line, raising detection
-  from 69 to 95 mAP and cutting manual review time by 40%.
+  A camera system that spots print defects on a moving press. Detection went
+  from 69 to 95 on the standard score, and manual checking fell by 40%.
 ---
 
-## Context
+## The short version
 
-High-speed print lines produce more surface than a person can watch. Inspection
-was manual and sampled: an operator pulled sheets, examined them, and made a
-call about the run they represented. Defects that appeared between samples were
-found by the customer.
+A printing press makes more than a person can watch. I built a camera system
+that checks the print as it comes off the line and flags the bad ones, so
+problems get caught on the press and not by the customer.
 
-The brief was to detect defects on the line itself, across several print
-surfaces, without slowing the line down and without flooding operators with
-false alarms.
+## The problem
 
-## What was hard
+Checking was done by hand, on samples. Someone pulled a few sheets, looked at
+them, and decided whether the whole run was fine. Anything that went wrong
+between samples got through.
 
-**The surfaces disagree.** A defect that is high-contrast on one substrate is
-nearly invisible on another. A single detector tuned on one surface degrades
-badly on the rest, and averaging across them produces a model that is mediocre
-everywhere.
+Three things made it hard to automate. The same flaw looks obvious on one
+material and nearly invisible on another. The check has to keep up with the
+press. And false alarms cost you twice: they waste the operator's time now, and
+after enough of them people stop trusting the alarm.
 
-**Speed sets the budget.** Inspection has to keep pace with the line, which caps
-how much preprocessing and how large a model is affordable per frame.
+## How it works
 
-**False positives are expensive twice.** They cost operator attention now, and
-they cost trust later — an alerting system operators learn to ignore is worse
-than no alerting system, because it looks like coverage.
+1. **Even out the picture.** Lighting and contrast are corrected first, so the
+   system is looking at the print and not at how bright the material is.
+2. **Find the flaws.** A model trained on examples from every material marks
+   what looks wrong. One model for all of them, so there's one thing to
+   maintain and not a family of them.
+3. **Group the repeats.** The same fault turning up again and again is grouped
+   as one problem, not four hundred separate alarms.
 
-## Approach
+## What changed
 
-Preprocessing normalises what varies between substrates before the detector sees
-it: illumination correction and contrast handling in OpenCV, so the model is
-learning defect shape rather than surface brightness.
+- Detection went from **69 to 95** on the standard score for this kind of
+  model (it's called mAP, and it's out of 100).
+- Time spent on manual checks fell by **40%**.
+- Recurring faults were identified **25%** more accurately, across more than
+  700 sheets.
+- It went into live use with real-time alerts, and tracing a fault back to its
+  source got **35%** better.
 
-Detection is YOLOv8, trained across the print surfaces in scope rather than one
-at a time, so a single deployed model generalises instead of a family of models
-that each need their own maintenance.
+## What I'd do next
 
-Beyond detection, the fault patterns matter more than the individual hits. More
-than 700 print sheets were analysed with defect clustering, which turns a stream
-of isolated alerts into recurring pattern groups — the same recurring fault,
-recognised as one problem rather than four hundred.
+Make the grouping part of the live system, so the press can say *this is the
+same fault as an hour ago* and not raise a fresh alarm each time.
 
-## Outcome
-
-- Detection performance improved from **69 to 95 mAP** across the print surfaces
-  in scope — 38 points.
-- Manual review time fell by **40%**.
-- Fault-pattern identification accuracy rose by **25%** through defect
-  clustering across 700+ sheets.
-- Deployed into live inspection with real-time alerts, improving traceability by
-  **35%**.
-
-## What I'd change
-
-The clustering step earns its keep and deserves to be first-class rather than
-analysis run alongside the detector. Folding pattern assignment into the serving
-path would let the line surface *this is the same fault as an hour ago* instead
-of a fresh alert each time, which is the difference between a detector and a
-diagnostic.
-
-The other gap is drift. The model was validated against the surfaces in scope at
-the time; a production vision system needs a standing check that today's
-distribution still resembles the one it was trained on, and an alert when it
-does not.
+And add a standing check that today's prints still look like the ones the
+model learned from, with a warning when they don't.

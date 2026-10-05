@@ -6,7 +6,7 @@ import { RagDemo } from "@/components/viz/RagDemo";
 export const metadata: Metadata = {
   title: "Agentic RAG demo",
   description:
-    "Ask 116 FDA documents a question and watch the pipeline work: hybrid retrieval, a relevance gate that can refuse, and a citation check in plain code that throws away any draft citing a source it was never given.",
+    "Ask 116 FDA documents a question. It answers only from what they say, shows where each fact came from, and refuses when the documents don't cover it.",
 };
 
 /**
@@ -16,6 +16,11 @@ export const metadata: Metadata = {
  * record of what it did with the question: which passages each search found,
  * what the gate said, which drafts the citation check threw away. The copy
  * below it only states things that were measured.
+ *
+ * The words were rewritten on 2026-10-04, at his request, for somebody who has
+ * never heard of retrieval: what it does and why it can say no, in five short
+ * steps, with the measurements that only an engineer would ask for folded
+ * under one line.
  */
 export default function RagDemoPage() {
   return (
@@ -24,23 +29,21 @@ export default function RagDemoPage() {
         <SectionLabel
           index="—"
           label="live demo"
-          meta="116 FDA documents / 1,752 chunks"
+          meta="116 FDA documents / 1,752 passages"
         />
         <h1 className="font-display text-hero leading-[0.88]">
           It answers from the documents, or it doesn&rsquo;t answer.
         </h1>
         <p className="measure text-lead text-steel">
-          Regulatory questions are the kind where a confident wrong answer is
-          worse than no answer. So this doesn&rsquo;t just search and summarise.
-          It pulls five passages out of 97 FDA 510(k) clearances and 19 guidance
-          documents, asks whether they actually answer the question, drafts an
-          answer that has to cite them by number, and then checks those
-          citations in plain code. A draft that cites something it was never
-          given gets thrown away.
+          Ask it about FDA approvals for wound dressings. It finds the five
+          most relevant passages in 116 official documents, answers only from
+          those, and shows which passage each fact came from. If the documents
+          don&rsquo;t answer your question, it says so. On a regulatory
+          question, a confident wrong answer is worse than no answer.
         </p>
         <p className="label-mono">
-          Wound dressing clearances and FDA guidance · retrieval runs on this
-          server · drafting by DeepSeek V3
+          97 FDA clearances and 19 guidance documents · answers written by
+          DeepSeek V3
         </p>
       </header>
 
@@ -59,28 +62,28 @@ export default function RagDemoPage() {
         <ol className="mt-10 grid list-none gap-px p-0 sm:grid-cols-2 lg:grid-cols-5">
           <Step
             n="01"
-            title="Retrieve"
-            body="Two searches over 1,752 chunks. One by meaning, using bge-small embeddings, which finds “gamma irradiation” when you ask about sterilisation. One by exact keyword, BM25, which finds “ISO 10993-1” when meaning search would wander. Thirty candidates each, fused by rank into five."
+            title="Search"
+            body="Two searches through the documents: one by meaning, one by exact words. The best five passages from both are kept."
           />
           <Step
             n="02"
-            title="Gate"
-            body="Search always returns something, relevant or not. So a model is asked one question with a one-word answer: do these passages actually help? If not, it refuses before writing a word."
+            title="Check they help"
+            body="A search always finds something, useful or not. So it's asked one yes-or-no question: do these passages actually answer this? If not, it stops here."
           />
           <Step
             n="03"
-            title="Draft"
-            body="The model answers from the five passages only, and every factual sentence has to carry a tag, [S1] to [S5]. Numbered tags, not document names, because a number can only be right or wrong."
+            title="Write"
+            body="The answer is written from those five passages only, and every fact has to point at the passage it came from."
           />
           <Step
             n="04"
-            title="Check"
-            body="Plain code, no model. Every tag has to point at a passage the model was actually given, and an answer with no tags at all fails too. This is the step that makes a made-up source impossible to serve."
+            title="Check the sources"
+            body="A simple check with no AI in it: every source the answer points at has to be one it was actually given. This is what stops a made-up source getting through."
           />
           <Step
             n="05"
             title="Retry or refuse"
-            body="A failed draft is sent back once, with what was wrong. If the second draft fails the check too, the answer is a refusal, not the best of two bad drafts."
+            body="A failed answer gets one more try, with what was wrong. If that fails too, it refuses. No best-of-two-bad-answers."
           />
         </ol>
       </section>
@@ -90,31 +93,37 @@ export default function RagDemoPage() {
           <span className="text-signal">03</span> / is this actually the project
         </p>
         <h2 id="parity-title" className="font-display text-section mt-5">
-          The same search as the Python, checked number for number.
+          The same search as the original, checked.
         </h2>
         <p className="measure text-lead text-steel mt-5">
-          The project is Python, and it searches with PyTorch and an embedded
-          Qdrant database, neither of which fits in a serverless function. So
-          the search on this page is a TypeScript port, embedding model
-          included. A port that&rsquo;s nearly right quietly returns different
-          passages, so it was checked against the real Python retriever on 24
-          questions before it was allowed to run here.
+          The real project is written in Python and is too heavy to run on a
+          website. So this page runs a copy of its search, rewritten for the
+          web. A copy that&rsquo;s nearly right quietly gives different
+          results, so I tested it against the original on 24 questions before
+          letting it run here. It matched on all of them.
         </p>
 
-        <div className="mt-10 grid gap-px sm:grid-cols-2 lg:grid-cols-4">
-          <Cell value="24 / 24" label="questions tokenised identically" note="plus 300 chunks of corpus text" />
-          <Cell value="0.99999997" label="lowest cosine to the Python vectors" note="1.0 would be bit-identical" />
-          <Cell value="24 / 24" label="identical top 30, both searches" note="meaning and keyword, in order" />
-          <Cell value="24 / 24" label="identical top 5, every mode" note="dense, keyword, and fused" />
-        </div>
-
-        <p className="measure text-body text-steel mt-8">
-          The embedding model ships at half precision, 67 MB instead of 133.
-          That was measured before it was chosen: half precision kept every
-          ranking identical on all 24 questions, while 8-bit, at half the size
-          again, changed the top 30 on 23 of them. A small model is not a reason
-          to accept a different answer.
-        </p>
+        <details className="border-hairline mt-8 border">
+          <summary className="label-mono text-signal cursor-pointer px-4 py-3">
+            The measurements, for anyone who wants them
+          </summary>
+          <div className="px-4 pb-5">
+            <div className="grid gap-px sm:grid-cols-2 lg:grid-cols-4">
+              <Cell value="24 / 24" label="questions tokenised identically" note="plus 300 chunks of corpus text" />
+              <Cell value="0.99999997" label="lowest cosine to the Python vectors" note="1.0 would be bit-identical" />
+              <Cell value="24 / 24" label="identical top 30, both searches" note="meaning and keyword, in order" />
+              <Cell value="24 / 24" label="identical top 5, every mode" note="dense, keyword, and fused" />
+            </div>
+            <p className="measure text-body text-steel mt-6">
+              The search by meaning uses bge-small embeddings and the search by
+              exact words uses BM25; thirty candidates from each are fused by
+              rank into five. The embedding model ships at half precision, 67
+              MB instead of 133. That was measured before it was chosen: half
+              precision kept every ranking identical on all 24 questions, while
+              8-bit, at half the size again, changed the top 30 on 23 of them.
+            </p>
+          </div>
+        </details>
       </section>
 
       <section aria-labelledby="limits-title" className="section-gap">
@@ -125,43 +134,27 @@ export default function RagDemoPage() {
           Where I&rsquo;d push on it.
         </h2>
         <ul className="measure mt-8 flex list-none flex-col gap-5 p-0">
-          <Limit title="The exam is written. It hasn't been sat yet.">
-            The citation check proves an answer only cites passages it was
-            given, not that it reads them correctly. Measuring that needs
-            questions with known answers, so I built them: a model drafted 66
-            from real passages and I reviewed every one by hand. 26 were
-            dropped, mostly because the passage was a mangled comparison table
-            or a boilerplate cover letter and the answer couldn&rsquo;t be
-            trusted. That left 49: 40 with a known answer and the page it lives
-            on, across 36 documents, and 9 it should refuse. Scoring the system
-            against them is the next step, so this page makes no accuracy
-            claim yet.
+          <Limit title="It hasn't been graded yet.">
+            The source check proves an answer only points at passages it was
+            given, not that it read them correctly. To measure that there are
+            now 49 test questions, each reviewed by hand: 40 with a known
+            answer, and 9 it should refuse. Scoring it against them is the
+            next step, so this page makes no accuracy claim.
           </Limit>
-          <Limit title="The gate is a judgement, not a rule.">
-            Whether passages are relevant is decided by a model saying one word.
-            It is told to lean towards yes, so it will sometimes let a weak set
-            of passages through; the drafting step can still refuse, and often
-            does.
+          <Limit title="It can find the right topic in the wrong document.">
+            Ask what testing the FDA expects for a dressing, and it mostly
+            finds manufacturers describing the tests they ran themselves. When
+            that happens it declines, which is the right call with those
+            passages. Searching the FDA&rsquo;s own guidance first is the fix.
           </Limit>
-          <Limit title="It can find the right subject in the wrong kind of document.">
-            Ask what biocompatibility testing FDA expects for a dressing on an
-            open wound, and it declines. Four of the five passages it retrieves
-            are manufacturers describing the tests they ran on their own
-            devices, and the model reports that none of them says what FDA
-            expects. Declining is the right call with those passages. Finding
-            better ones, by searching the guidance when a question asks what
-            FDA wants, is the fix.
+          <Limit title="Older documents are mostly missing.">
+            42 of the 140 clearances I downloaded were scanned paper with no
+            readable text, and most of those are older. They were left out
+            rather than added as blank pages.
           </Limit>
-          <Limit title="Older filings are under-represented.">
-            42 of the 140 clearances downloaded were scanned paper with no
-            extractable text, and most of those are older. They were left out
-            rather than indexed as empty pages, which is honest but skews the
-            corpus towards recent submissions.
-          </Limit>
-          <Limit title="It is a demonstration, not regulatory advice.">
-            It knows wound dressings and the guidance around them, and nothing
-            else. Ask it about something outside that and the right behaviour is
-            the one it has: refusing.
+          <Limit title="It only knows wound dressings.">
+            Ask about anything else and the right behaviour is the one it has:
+            refusing. It&rsquo;s a demonstration, not regulatory advice.
           </Limit>
         </ul>
       </section>

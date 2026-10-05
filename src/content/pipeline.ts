@@ -23,6 +23,14 @@ import excerptData from "./data/pipeline-excerpts.json";
  * things and so this is too. It runs on DuckDB. The BigQuery path is written
  * and has not been run against a live project. And the rain regression
  * declines to answer on the data collected so far.
+ *
+ * ## Who the words are for
+ *
+ * Somebody who has never heard of dbt. Since 2026-10-04 the titles, kickers
+ * and paragraphs are in plain language at his request ("Find the arrivals",
+ * not "Arrival inference"); the code under each one is where the technical
+ * reader goes. Keep the two apart: no tool names in the prose unless they are
+ * explained in the same breath.
  */
 
 export type FeedNode = {
@@ -70,67 +78,67 @@ export const stages: StageNode[] = [
   {
     id: "ingest",
     index: "01",
-    title: "Ingest",
+    title: "Collect",
     kicker: "Eight feeds, every 30 seconds",
     body: [
-      "A poller pulls all eight GTFS-realtime endpoints at once, every 30 seconds, and decodes the protobuf into flat rows. A feed that fails costs that feed its round, not the round.",
-      "Every row carries two clocks: the feed's own timestamp, and ours. The first is the whole trick. The feed says what the MTA believed at that instant, and the difference between consecutive beliefs is where an arrival hides.",
+      "A small program asks all eight of the MTA's live feeds for the current picture, every 30 seconds. If one feed fails, the other seven still get saved.",
+      "Every answer is stamped with the time the MTA made it. Comparing one picture with the next is how an arrival gets found later.",
     ],
     code: codeFor("ingest"),
   },
   {
     id: "landing",
     index: "02",
-    title: "Landing",
-    kicker: "Append-only files, filed by observation day",
+    title: "Store",
+    kicker: "Every copy kept, nothing changed",
     body: [
-      "Every snapshot is written untouched as a compressed file, filed by date and hour. Nothing is updated in place, so a bad transformation is never a lost observation.",
-      "The warehouse is built from those files with dbt on DuckDB, which is why the whole pipeline runs from a clone with no cloud account. A BigQuery landing table, partitioned by day and clustered by route and stop, is written in the repository and has not been run against a live project yet.",
+      "Each picture is saved as a small file, filed by date and hour, and never edited. If I get the logic wrong later, I can redo it. If I threw data away here, it would be gone.",
+      "Everything else is built from these files, in a database that runs on a laptop with no account. A cloud version, on BigQuery, is written and hasn't been run yet.",
     ],
     code: codeFor("landing"),
   },
   {
     id: "arrival",
     index: "03",
-    title: "Arrival inference",
-    kicker: "The source never writes an arrival event",
+    title: "Find the arrivals",
+    kicker: "A train that vanished from the list",
     body: [
-      "The MTA publishes predictions, not arrivals. A train that has arrived simply stops appearing in the feed for that stop.",
-      "So the arrival is derived: take the last sighting of each (trip, stop) pair, require that it was genuinely absent from a later snapshot of its own feed, and drop anything that vanished while still more than two minutes from being due. That one is a cancellation, not an arrival.",
-      "The last sightings are kept in a table, and each run goes back over only the pairs whose answer could have changed, including the trains that were in the newest snapshot last time. A test builds the same data in several sittings and in one pass, and the two warehouses have to match row for row.",
+      "The MTA says when a train is expected, never when it arrived. A train that arrives just stops being listed for that stop.",
+      "So: take the last time each train was listed for a stop, make sure it really did disappear afterwards, and ignore it if it vanished while still more than two minutes away. That last case is a cancellation.",
+      "Each run only goes back over the trains whose answer could have changed, and a test checks the result matches redoing it all from scratch.",
     ],
     code: codeFor("arrival"),
   },
   {
     id: "models",
     index: "04",
-    title: "dbt models",
-    kicker: "Star schema, tested on every run",
+    title: "Measure the wait",
+    kicker: "Gaps between trains become waiting time",
     body: [
-      "Inferred arrivals become headways, headways become excess wait time — the minutes a rider waits beyond what an evenly spread service of the same frequency would ask, which is the number that actually describes a bad commute.",
-      "Facts and dimensions are separated so excess wait can be sliced by line, station, and hour without rewriting the aggregation. 59 dbt tests run on every build: uniqueness on the real grain, nullity, referential integrity, and one asserting that excess wait can never be negative.",
+      "Arrivals give the gaps between trains. Gaps give the wait: the extra minutes a rider spends on the platform because trains came bunched and not evenly spaced.",
+      "59 automatic checks run on every build, including one that the extra wait can never come out negative.",
     ],
     code: codeFor("models"),
   },
   {
     id: "weather",
     index: "05",
-    title: "Weather regression",
-    kicker: "Fitted only when the data can answer",
+    title: "Ask about rain",
+    kicker: "Only answers when it has enough data",
     body: [
-      "Hourly Central Park rainfall is joined to excess wait by route and hour, and a regression is fitted per route, controlling for hour of day.",
-      "It reports a coefficient only when the data can support one, and says which test it failed when it cannot: too few route-hours, too few wet hours, or no variation in rainfall. On the 150 minutes collected so far, it declines. The chart below asks the same question of eleven years of the MTA's published figures instead.",
+      "Hourly rainfall in Central Park is lined up against the wait, line by line, to see whether rain makes it worse.",
+      "It refuses to give an answer when there isn't enough data to back one, and on the 150 minutes collected so far, it refuses. The chart below asks the same question of eleven years of the MTA's own figures.",
     ],
     code: codeFor("weather"),
   },
   {
     id: "serving",
     index: "06",
-    title: "Serving",
-    kicker: "One warehouse file, every column described",
+    title: "Use it",
+    kicker: "One file, every column explained",
     body: [
-      "The warehouse is a single DuckDB file, rebuilt from the raw files by one command and read by the analysis scripts. A catalog generated from the project describes all eight tables and 116 columns, and the build fails if a column is left without a description.",
-      "This site does not query it. The live demo runs the same three rules in the browser on the MTA's live feed, and the rain chart below comes from a snapshot committed to the site's repository and dated on the chart. A portfolio page should not depend on a warehouse being awake.",
+      "The result is a single database file that one command rebuilds from the saved copies. Every table and column in it is described on a page that's generated automatically, so the description can't fall behind.",
+      "This site doesn't read from it. The live demo runs the same rules in your browser on the MTA's live feed, and the rain chart below uses the MTA's published figures.",
     ],
   },
 ];

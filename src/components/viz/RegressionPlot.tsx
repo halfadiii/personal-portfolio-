@@ -256,18 +256,28 @@ export function RegressionPlot({ snapshot }: { snapshot: WaitSnapshot }) {
         <figcaption className="label-mono mt-4">
           One dot is one month on one line, {snapshot.windowStart} to{" "}
           {snapshot.windowEnd}; {visible.length} of {snapshot.points.length}{" "}
-          shown. The vertical axis has month-of-year and the 2020&ndash;21
-          period partialled out, so the cloud and the line are the same
-          estimate. Bands are 95% confidence intervals on the slope. Snapshot
-          generated {snapshot.generatedAt}.
+          shown. The time of year and the pandemic months have already been
+          allowed for, so what&rsquo;s left is the part rain could explain.
+          The shaded band around each line shows how unsure it is: when a flat
+          line fits inside the band, there&rsquo;s no effect to speak of. Data
+          as of {snapshot.generatedAt}.
         </figcaption>
       </figure>
 
       <details className="border-hairline border">
         <summary className="label-mono text-signal cursor-pointer px-4 py-3">
-          Fitted coefficients as a table
+          The fitted numbers, as a table
         </summary>
-        <div className="overflow-x-auto">
+        {/* Wider than a phone, so it scrolls, and a region that scrolls has
+            to be reachable from the keyboard. It was not until 2026-10-04:
+            no audit had opened this section before running. `relative` for
+            the absolutely positioned caption inside it. */}
+        <div
+          className="relative overflow-x-auto"
+          tabIndex={0}
+          role="region"
+          aria-label="Fitted effect of rainfall by subway line, scrollable"
+        >
           <table className="text-small w-full border-collapse text-left">
             <caption className="sr-only">
               Fitted effect of rainfall on excess wait time, by subway line.

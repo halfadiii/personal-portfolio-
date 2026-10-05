@@ -32,14 +32,12 @@ export async function Pipeline() {
           index="01"
           label="subway pipeline"
           meta="8 feeds / 30s / duckdb / dbt"
-          title="The MTA never records when a train actually arrives."
+          title="The six steps, one at a time."
         >
           <p className="measure text-lead text-steel">
-            It publishes what it expects to happen. An arrival is the moment a
-            prediction stops being published — so the arrival has to be
-            inferred, and every number downstream depends on inferring it
-            correctly. Open a stage to see what it does and the code that runs
-            it.
+            From the MTA&rsquo;s live feed to the wait a rider actually has.
+            Open a step for a plain explanation of what it does, and the real
+            code that does it.
           </p>
         </SectionHeading>
 

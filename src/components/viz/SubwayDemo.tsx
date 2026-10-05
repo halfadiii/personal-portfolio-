@@ -323,31 +323,41 @@ export function SubwayDemo() {
         >
           <div>
             <p className="label-mono">
-              <span className="text-signal">01</span> / the feed, every{" "}
-              {POLL_SECONDS} seconds
+              <span className="text-signal">01</span> / the MTA&rsquo;s data,
+              every {POLL_SECONDS} seconds
             </p>
             <h3 id="watch-title" className="font-display text-sub mt-2">
               Watch a stop drop off the list.
             </h3>
             <p className="measure text-small text-steel mt-2">
-              Each row is one poll for train{" "}
-              <span className="text-signal">{watched.current ?? "—"}</span>.
-              Columns are the stops it is predicting. The numbers revise as it
-              gets closer, and when it passes a platform that column empties.
-              That gap is the arrival, and it is the only signal the feed gives.
+              Each row is one update for train{" "}
+              <span className="text-signal">{watched.current ?? "—"}</span>, and
+              each column is a stop it&rsquo;s heading for. The times shift as
+              it gets closer. When it passes a platform, that column goes
+              empty. That&rsquo;s the arrival, and it&rsquo;s the only sign the
+              MTA gives.
             </p>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* One column per stop the train is heading for, so once the live
+              data arrives this is wider than its box and scrolls. The stock
+              audit runs before that, which is how an unreachable scroller
+              went unnoticed here. `relative` for the caption inside it. */}
+          <div
+            className="relative overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Predicted arrival times for the followed train, scrollable"
+          >
             <table className="w-full border-collapse text-left">
               <caption className="sr-only">
                 Predicted arrival times published for the followed train, one
-                row per poll of the live MTA feed.
+                row per update of the live MTA feed.
               </caption>
               <thead>
                 <tr className="rule-top rule-bottom">
                   <th scope="col" className="label-mono text-signal py-2 pr-4">
-                    poll
+                    update
                   </th>
                   {columns.map((stop) => (
                     <th
@@ -404,7 +414,7 @@ export function SubwayDemo() {
                       className="label-mono py-4"
                       colSpan={columns.length + 1}
                     >
-                      waiting for the first poll…
+                      waiting for the first update…
                     </td>
                   </tr>
                 ) : null}
@@ -420,17 +430,17 @@ export function SubwayDemo() {
         >
           <div>
             <p className="label-mono">
-              <span className="text-signal">02</span> / what the inference
-              produces
+              <span className="text-signal">02</span> / what gets worked out
             </p>
             <h3 id="metrics-title" className="font-display text-sub mt-2">
-              Headway, and excess wait.
+              The gap between trains, and the extra wait.
             </h3>
             <p className="measure text-small text-steel mt-2">
-              Built only from arrivals this page has inferred since you opened
-              it — the same inputs the warehouse has, and nothing else. There is
-              no error column, because nobody publishes when the train actually
-              arrived. That absence is the whole reason the pipeline exists.
+              Worked out only from the arrivals this page has seen since you
+              opened it, so give it a few minutes. There&rsquo;s no
+              right-or-wrong column, because nobody publishes when a train
+              actually arrived. That gap is the whole reason this project
+              exists.
             </p>
           </div>
 
@@ -451,16 +461,16 @@ export function SubwayDemo() {
 
           <dl className="rule-top rule-bottom grid grid-cols-2 gap-5 py-5">
             <Metric
-              label="Arrivals inferred"
+              label="Arrivals worked out"
               value={String(view.arrivals.length)}
               /* Line-wide, because that is the figure that shows the thing
                  working: it climbs every poll. The platform being measured
                  gets a handful an hour, which is a fact about the L rather
                  than about the pipeline. */
-              note={`across the L · ${view.discarded} dropped as early`}
+              note={`across the L · ${view.discarded} ignored as cancelled`}
             />
             <Metric
-              label="Mean headway"
+              label="Average gap between trains"
               value={
                 metrics.meanHeadway
                   ? `${metrics.meanHeadway.toFixed(1)} min`
@@ -471,31 +481,31 @@ export function SubwayDemo() {
               }`}
             />
             <Metric
-              label="Excess wait"
+              label="Extra wait"
               value={
                 metrics.excessWait !== null
                   ? `${metrics.excessWait.toFixed(2)} min`
                   : "—"
               }
-              note="beyond an even service"
+              note="more than if trains were evenly spaced"
             />
             <Metric
               label="Watching since"
               value={view.watchingSince ? clock(view.watchingSince) : "—"}
-              note={`${view.polls} poll${view.polls === 1 ? "" : "s"}`}
+              note={`${view.polls} update${view.polls === 1 ? "" : "s"}`}
             />
           </dl>
 
           {metrics.headways === 0 ? (
             <p className="label-mono">
-              A headway needs two trains to have arrived at{" "}
-              {stationName(focus)} while this page was open. Leave it running,
-              or pick a busier platform.
+              A gap needs two trains to have arrived at {stationName(focus)}{" "}
+              while this page was open. Leave it running, or pick a busier
+              station.
             </p>
           ) : null}
 
           <div>
-            <p className="label-mono mb-2">Most recent inferred arrivals</p>
+            <p className="label-mono mb-2">Latest arrivals worked out</p>
             <ul className="flex list-none flex-col p-0">
               {recent.map((arrival) => (
                 <li
@@ -511,15 +521,15 @@ export function SubwayDemo() {
               ))}
               {recent.length === 0 ? (
                 <li className="label-mono py-2">
-                  none yet — an arrival is a row disappearing, so it takes two
-                  polls to see one
+                  none yet. An arrival is a stop disappearing, so it takes two
+                  updates to see one
                 </li>
               ) : null}
             </ul>
             <p className="label-mono mt-3">
-              A prediction that vanishes while still more than {GRACE_SECONDS}s
-              in the future is a cancellation or a re-route, not an arrival, and
-              is dropped.
+              A train that drops off the list while still more than{" "}
+              {GRACE_SECONDS} seconds away was cancelled or re-routed, so it
+              isn&rsquo;t counted.
             </p>
           </div>
         </section>
